@@ -11,7 +11,7 @@ data:
 train:
   ratios: [2, 3, 4, 5]
   n_teacher: 3000
-  steps: 1500
+  steps: 1000
   grad_accum: 4
   batch: 4
   lr: 3.0e-4
