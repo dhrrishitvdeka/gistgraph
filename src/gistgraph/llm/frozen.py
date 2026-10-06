@@ -114,6 +114,7 @@ class FrozenLM(nn.Module):
             attention_mask=mask,
             max_new_tokens=max_new_tokens,
             do_sample=False,
+            repetition_penalty=1.0,  # override the model's default so decoding is plain greedy
             use_cache=True,
             pad_token_id=self.tokenizer.pad_token_id,
         )
