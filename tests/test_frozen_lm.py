@@ -1,44 +1,6 @@
-import pytest
 import torch
-from transformers import Qwen2Config, Qwen2ForCausalLM
 
-from gistgraph.llm.frozen import FrozenLM, pad_left
-
-
-class CharTokenizer:
-    """Character-level tokenizer with the few attributes FrozenLM needs."""
-
-    eos_token = "<eos>"
-    pad_token = "<eos>"
-    pad_token_id = 0
-
-    def _ids(self, text):
-        return [(ord(c) % 90) + 5 for c in text]
-
-    def __call__(self, text, add_special_tokens=False, return_tensors=None):
-        ids = torch.tensor([self._ids(text)])
-        return type("Enc", (), {"input_ids": ids})()
-
-    def apply_chat_template(self, messages, tokenize=False, add_generation_prompt=True):
-        return f"<u>{messages[0]['content']}</u><a>"
-
-    def batch_decode(self, out, skip_special_tokens=True):
-        return ["".join(chr(int(i) + 30) for i in row) for row in out]
-
-
-@pytest.fixture(scope="module")
-def lm():
-    torch.manual_seed(0)
-    cfg = Qwen2Config(
-        vocab_size=100,
-        hidden_size=32,
-        intermediate_size=64,
-        num_hidden_layers=2,
-        num_attention_heads=2,
-        num_key_value_heads=2,
-        max_position_embeddings=512,
-    )
-    return FrozenLM(Qwen2ForCausalLM(cfg), CharTokenizer())
+from gistgraph.llm.frozen import pad_left
 
 
 def test_parameters_are_frozen(lm):
