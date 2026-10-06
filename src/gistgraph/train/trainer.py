@@ -16,6 +16,7 @@ from gistgraph.data.teacher_cache import TrainItem, to_tensor
 from gistgraph.eval.run_learned import amp_dtype, dev_f1
 from gistgraph.llm.frozen import FrozenLM
 from gistgraph.train.losses import ce_loss, kd_loss, lr_at, recon_weight
+from gistgraph.train.rate import RateController
 
 RECON_QUESTION = "Repeat the context."
 
@@ -60,6 +61,7 @@ class Trainer:
         self.use_amp = bool(t.amp and self.device.type == "cuda")
         self.scaler = torch.amp.GradScaler(enabled=self.use_amp and amp_dtype() == torch.float16)
         self.step = 0
+        self.rate = RateController(cfg.loss.rate_dual_lr, cfg.loss.rate_quad)
 
     # ---- data ----
     def _batch(self, micro_idx: int) -> list[TrainItem]:
@@ -121,12 +123,33 @@ class Trainer:
             out["total"] = out["total"] + recon_w * out["recon"]
         if "qa" in out:
             out["total"] = out["total"] + cfg.loss.qa_ce_weight * out["qa"]
-        out.update(self._extra_losses(mem))
+        weights = {"lb": cfg.loss.lb_weight, "rate": 1.0, "edge_l0": cfg.loss.edge_l0}
+        for name, term in self._regularisers(mem, ratio).items():
+            out[name] = term
+            if name in weights:
+                out["total"] = out["total"] + weights[name] * term
         return out
 
-    def _extra_losses(self, mem) -> dict[str, Tensor]:
-        """Hook for variants with regularisers (rate penalty, load balance); none for flat."""
-        return {}
+    def _regularisers(self, mem, ratio: float) -> dict[str, Tensor]:
+        """Variant-specific terms read from ``mem.aux``.
+
+        ``lb`` is the router load-balance loss, ``rate`` the Lagrangian rate penalty on the open
+        fraction of nodes (active only after ``rate_start_frac`` of training), and ``frac`` /
+        ``lambda`` are logged diagnostics.
+        """
+        aux, out = mem.aux, {}
+        if "lb" in aux:
+            out["lb"] = aux["lb"]
+        if "exp_active" in aux:
+            frac = (aux["exp_active"] / aux["n_tokens"]).mean()
+            out["frac"] = frac.detach()
+            out["lambda"] = torch.tensor(self.rate.multiplier(ratio))
+            if self.step >= self.cfg.loss.rate_start_frac * self.cfg.train.steps:
+                out["rate"] = self.rate.penalty(ratio, frac)
+                self.rate.update(ratio, float(frac.detach()))
+        if "exp_edges" in aux:
+            out["edge_l0"] = aux["exp_edges"].mean()
+        return out
 
     # ---- checkpoints ----
     def _save(self, name: str = "ckpt.pt") -> None:
@@ -135,6 +158,7 @@ class Trainer:
                 "compressor": self.compressor.state_dict(),
                 "opt": self.opt.state_dict(),
                 "scaler": self.scaler.state_dict(),
+                "rate": self.rate.state_dict(),
                 "step": self.step,
             },
             self.out / name,
@@ -148,6 +172,7 @@ class Trainer:
         self.compressor.load_state_dict(state["compressor"])
         self.opt.load_state_dict(state["opt"])
         self.scaler.load_state_dict(state["scaler"])
+        self.rate.load_state_dict(state["rate"])
         self.step = state["step"]
         print(f"resumed from step {self.step}", flush=True)
 
