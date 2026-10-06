@@ -1,0 +1,17 @@
+﻿base: ../base.yaml
+out_dir: runs/m1_baselines
+eval:
+  methods:
+    - truncation_head
+    - truncation_headtail
+    - extractive_lead
+    - extractive_textrank
+    - extractive_bm25
+    - llmlingua2
+  ratios: [2, 3, 4, 5]
+  split: validation
+  batch_size: 8
+  max_new_tokens: 32
+data:
+  eval: [hotpotqa, 2wiki, squad, longbench_hotpotqa]
+  n_eval: 500
