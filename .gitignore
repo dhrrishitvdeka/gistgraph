@@ -10,10 +10,10 @@ build/
 dist/
 
 # experiment artifacts
-runs/
-cache/
-data/
-wandb/
+/runs/
+/cache/
+/data/
+/wandb/
 *.npz
 *.pt
 *.ckpt
