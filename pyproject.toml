@@ -12,9 +12,15 @@ requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
     "pyyaml>=6.0",
+    "torch>=2.2",
+    "transformers>=4.45",
+    "datasets>=2.18",
+    "huggingface_hub>=0.23",
+    "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
+baselines = ["llmlingua>=0.2.2"]
 dev = [
     "pytest>=8.0",
     "ruff>=0.6",
