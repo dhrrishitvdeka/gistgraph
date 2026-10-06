@@ -19,14 +19,17 @@ class Projector(nn.Module):
     is normalised and multiplied by a learned gain that starts at the mean embedding norm.
     """
 
-    def __init__(self, d: int, d_llm: int, target_norm: float):
+    def __init__(self, d: int, d_llm: int, target_norm: float, pe_dim: int = 0):
         super().__init__()
+        self.pe = nn.Linear(pe_dim, d) if pe_dim else None
         self.mlp = nn.Sequential(
             nn.LayerNorm(d), nn.Linear(d, 2 * d_llm), nn.GELU(), nn.Linear(2 * d_llm, d_llm)
         )
         self.log_gain = nn.Parameter(torch.tensor(float(target_norm)).log())
 
-    def forward(self, z: Tensor) -> Tensor:
+    def forward(self, z: Tensor, pe: Tensor | None = None) -> Tensor:
+        if self.pe is not None and pe is not None:
+            z = z + self.pe(pe.to(z.dtype))  # graph positional bias
         out = self.mlp(z)
         out = out / out.norm(dim=-1, keepdim=True).clamp(min=1e-6)
         return out * self.log_gain.exp()
