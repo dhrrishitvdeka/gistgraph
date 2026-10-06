@@ -58,6 +58,8 @@ class WriterConfig:
 class EdgesConfig:
     enabled: bool = False
     relations: int = 4
+    mode: str = "learned"  # learned | random (random graph of equal degree, a control)
+    rank: int = 64
     sparsifier: str = "entmax15"  # entmax15 | gumbel_topk
     max_deg: int = 8
 
@@ -98,7 +100,7 @@ class LossConfig:
     kd_topk: int = 64
     rate_dual_lr: float = 0.05
     rate_quad: float = 10.0  # augmented-Lagrangian weight that damps the rate controller
-    edge_l0: float = 1e-4
+    edge_l0: float = 0.01  # weight on the (normalised) expected-edge penalty
     recon_weight: float = 1.0
     recon_anneal_frac: float = 0.3
     lb_weight: float = 0.01
