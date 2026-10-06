@@ -169,6 +169,7 @@ class RoutedCompressor(nn.Module):
         embeds = embeds.gather(1, order[..., None].expand(-1, -1, embeds.shape[-1]))
         active = active.gather(1, order)
         aux["active"] = active.sum(1)
+        aux["gate"] = gate.detach()  # in the original node order, like aux["adj"] and aux["write"]
         return Memory(embeds, active, aux)
 
 
