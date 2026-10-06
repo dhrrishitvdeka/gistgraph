@@ -40,6 +40,29 @@ def _cmd_eval(args) -> None:
     print(f"report written to {evaluate_learned(cfg, lm, comp)}")
 
 
+def _cmd_probe(args) -> None:
+    import json
+
+    import torch
+
+    from gistgraph.data.datasets import load_examples
+    from gistgraph.eval.probes import probe_model
+    from gistgraph.llm.frozen import FrozenLM
+    from gistgraph.model.compressor import build_compressor
+    from gistgraph.model.projector import mean_embedding_norm
+
+    cfg = load_config(args.config, args.overrides)
+    lm = FrozenLM.from_pretrained(cfg.llm.name, cfg.llm.dtype, False, args.device)
+    norm = mean_embedding_norm(lm.model.get_input_embeddings().weight)
+    comp = build_compressor(cfg, lm.d_model, norm).to(lm.device)
+    comp.load_state_dict(torch.load(Path(cfg.out_dir) / "compressor.pt", map_location=lm.device))
+    examples = load_examples("hotpotqa", cfg.eval.split, args.n, cfg.seed)
+    summary = probe_model(lm, comp, cfg, examples, args.ratio)
+    out = Path(cfg.out_dir) / "edge_probe.json"
+    out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2))
+
+
 def _cmd_report(args) -> None:
     from gistgraph.eval.results import build_results
 
@@ -74,6 +97,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--device", default="cuda")
     p.add_argument("overrides", nargs="*")
     p.set_defaults(func=_cmd_eval)
+
+    p = sub.add_parser("probe", help="edge-alignment probe on HotpotQA supporting paragraphs")
+    p.add_argument("--config", type=Path, required=True)
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--ratio", type=float, default=4.0)
+    p.add_argument("--n", type=int, default=200)
+    p.add_argument("overrides", nargs="*")
+    p.set_defaults(func=_cmd_probe)
 
     p = sub.add_parser("report", help="build docs/results from finished run directories")
     p.add_argument("runs", nargs="+", type=Path)
