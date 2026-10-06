@@ -76,6 +76,10 @@ class Trainer:
         rng = np.random.default_rng([self.cfg.seed, 1, micro_idx])
         return float(rng.choice(self.cfg.train.ratios))
 
+    def _chunks(self) -> int:
+        s = self.cfg.compressor.streaming
+        return s.chunks if s.enabled else 1
+
     # ---- losses ----
     def _losses(self, batch: list[TrainItem], ratio: float, recon_w: float) -> dict[str, Tensor]:
         cfg, lm = self.cfg, self.lm
@@ -83,7 +87,7 @@ class Trainer:
         ids, mask = pad_ids([it.ctx_ids for it in batch], pad_id, self.device)
         h = lm.token_features(ids, mask, cfg.llm.feature_layer)
         with torch.autocast(self.device.type, dtype=amp_dtype(), enabled=self.use_amp):
-            mem = self.compressor(h, mask, ratio)
+            mem = self.compressor(h, mask, ratio, chunks=self._chunks())
         prefixes = [mem.prefix(i) for i in range(len(batch))]
         questions = [it.ex.question for it in batch]
         out: dict[str, Tensor] = {}

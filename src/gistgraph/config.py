@@ -132,6 +132,7 @@ class EvalConfig:
     split: str = "validation"
     batch_size: int = 8
     max_new_tokens: int = 32
+    stream_chunks: int = 1  # >1 builds the memory incrementally from this many pieces (H4)
 
 
 @dataclass
