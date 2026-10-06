@@ -1,0 +1,14 @@
+﻿# Shared defaults. Experiment configs inherit from this with `base: ../base.yaml`.
+seed: 0
+out_dir: runs/default
+llm:
+  name: Qwen/Qwen2.5-0.5B-Instruct
+  dtype: auto
+  feature_layer: 12
+  grad_ckpt: true
+data:
+  train: [hotpotqa, 2wiki, squad]
+  eval: [hotpotqa, 2wiki, squad]
+  max_ctx_tokens: 1536
+  n_eval: 500
+  n_train: 30000
