@@ -70,7 +70,9 @@ def _answer_batch(lm):
 
 def test_build_answer_inputs_layout(lm):
     prefixes, answers, embeds, mask, starts = _answer_batch(lm)
-    assert mask.sum(1).tolist() == [s + len(a) for s, a in zip(starts.tolist(), answers)]
+    assert mask.sum(1).tolist() == [
+        s + len(a) for s, a in zip(starts.tolist(), answers, strict=True)
+    ]
     assert torch.allclose(embeds[0, starts[0] : starts[0] + 3], lm.embed(answers[0]))
     assert torch.allclose(embeds[1, starts[1] : starts[1] + 2], lm.embed(answers[1]))
 

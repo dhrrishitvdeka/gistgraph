@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as nnf
 from torch import Tensor, nn
 
 from gistgraph.model.routing import RoutedWriter
@@ -45,7 +45,7 @@ class MergeGate(nn.Module):
 def _grow(x: Tensor, k: int) -> Tensor:
     """Zero-pad dimension 1 up to ``k`` nodes."""
     pad = k - x.shape[1]
-    return x if pad <= 0 else F.pad(x, (0, 0) * (x.dim() - 2) + (0, pad))
+    return x if pad <= 0 else nnf.pad(x, (0, 0) * (x.dim() - 2) + (0, pad))
 
 
 def stream_update(

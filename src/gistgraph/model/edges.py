@@ -96,10 +96,7 @@ class EdgeInducer(nn.Module):
         null = self.null(z)  # [B, K, 1]
         logits = torch.cat([flat, null], dim=-1)
 
-        if self.sparsifier == "entmax15":
-            probs = entmax15(logits)
-        else:
-            probs = self._gumbel_topk(logits)
+        probs = entmax15(logits) if self.sparsifier == "entmax15" else self._gumbel_topk(logits)
         edge_probs = probs[..., :-1]
         edge_probs = (
             cap_degree(edge_probs, self.max_deg) if self.sparsifier == "entmax15" else edge_probs

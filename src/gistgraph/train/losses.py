@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-import torch.nn.functional as F
+import torch.nn.functional as nnf
 from torch import Tensor
 
 
@@ -22,15 +22,15 @@ def kd_loss(
     same k indices, so the student is still penalised for putting mass outside the teacher's
     support. Scaled by ``temp**2`` as in standard distillation.
     """
-    log_p_t = F.log_softmax(topk_logits.float() / temp, dim=-1)
-    log_p_s = F.log_softmax(student_logits.float() / temp, dim=-1).gather(-1, topk_idx)
+    log_p_t = nnf.log_softmax(topk_logits.float() / temp, dim=-1)
+    log_p_s = nnf.log_softmax(student_logits.float() / temp, dim=-1).gather(-1, topk_idx)
     kl = (log_p_t.exp() * (log_p_t - log_p_s)).sum(-1)  # [B, T]
     return (kl * valid).sum() / valid.sum().clamp(min=1) * temp**2
 
 
 def ce_loss(logits: Tensor, targets: Tensor, valid: Tensor) -> Tensor:
     """Mean token cross-entropy over valid positions. ``targets``: ``[B, T]`` token ids."""
-    nll = F.cross_entropy(logits.float().transpose(1, 2), targets, reduction="none")
+    nll = nnf.cross_entropy(logits.float().transpose(1, 2), targets, reduction="none")
     return (nll * valid).sum() / valid.sum().clamp(min=1)
 
 

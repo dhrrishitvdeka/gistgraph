@@ -2,13 +2,13 @@ import json
 
 import pytest
 import torch
-from helpers import toy_examples
 
 from gistgraph.config import load_config
 from gistgraph.data.teacher_cache import build_teacher_cache, load_teacher_cache, make_train_items
 from gistgraph.model.compressor import RoutedCompressor, build_compressor, max_slots
 from gistgraph.model.projector import mean_embedding_norm
 from gistgraph.train.trainer import Trainer
+from helpers import toy_examples
 
 D_IN = 16
 

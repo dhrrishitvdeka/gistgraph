@@ -4,13 +4,12 @@ import numpy as np
 import pytest
 import torch
 
-from helpers import toy_examples
-
 from gistgraph.config import load_config
 from gistgraph.data.teacher_cache import build_teacher_cache, load_teacher_cache, make_train_items
 from gistgraph.model.compressor import build_compressor
 from gistgraph.model.projector import mean_embedding_norm
 from gistgraph.train.trainer import Trainer, pad_ids, pad_targets
+from helpers import toy_examples
 
 
 def _cfg(tmp_path, steps=40, **extra):

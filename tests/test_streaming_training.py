@@ -2,7 +2,6 @@ import json
 
 import pytest
 import torch
-from helpers import toy_examples
 
 from gistgraph.config import load_config
 from gistgraph.data.teacher_cache import build_teacher_cache, load_teacher_cache, make_train_items
@@ -11,6 +10,7 @@ from gistgraph.eval.run_learned import make_prepare, method_label
 from gistgraph.model.compressor import build_compressor
 from gistgraph.model.projector import mean_embedding_norm
 from gistgraph.train.trainer import Trainer
+from helpers import toy_examples
 
 
 def _cfg(tmp_path, chunks=3, **extra):
