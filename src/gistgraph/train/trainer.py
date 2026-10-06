@@ -148,7 +148,10 @@ class Trainer:
                 out["rate"] = self.rate.penalty(ratio, frac)
                 self.rate.update(ratio, float(frac.detach()))
         if "exp_edges" in aux:
-            out["edge_l0"] = aux["exp_edges"].mean()
+            out["edge_l0"] = (aux["exp_edges"] / aux["n_tokens"]).mean()
+        for key in ("active", "mean_degree", "edge_entropy", "edge_mass"):  # diagnostics only
+            if key in aux:
+                out[key] = aux[key].float().mean().detach()
         return out
 
     # ---- checkpoints ----
