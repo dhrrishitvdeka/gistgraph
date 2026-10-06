@@ -15,6 +15,7 @@ from gistgraph.model.gates import HardConcreteGate
 from gistgraph.model.gnn import RelationalMP
 from gistgraph.model.projector import Projector
 from gistgraph.model.routing import RoutedWriter
+from gistgraph.model.streaming import MergeGate, stream_update
 from gistgraph.model.writer import FlatSlotWriter, num_slots
 
 
@@ -47,7 +48,9 @@ class FlatCompressor(nn.Module):
         self.writer = FlatSlotWriter(c.encoder.d, k_max, layers=c.encoder.layers)
         self.projector = Projector(c.encoder.d, d_llm, embed_norm)
 
-    def forward(self, h: Tensor, mask: Tensor, ratio: float | Tensor) -> Memory:
+    def forward(self, h: Tensor, mask: Tensor, ratio: float | Tensor, chunks: int = 1) -> Memory:
+        if chunks > 1:
+            raise ValueError("the flat compressor has no incremental update")
         b = h.shape[0]
         ratio_t = torch.as_tensor(ratio, dtype=torch.float32, device=h.device).expand(b)
         counts = num_slots(mask.sum(1), ratio_t, self.k_max)
@@ -76,9 +79,59 @@ class RoutedCompressor(nn.Module):
         )
         self.gate = HardConcreteGate(d, c.writer.gate_init) if self.adaptive else None
         self.projector = Projector(d, d_llm, embed_norm)
+        # learned merge correction exists only for models trained with streaming; without it
+        # the merge is the plain mass-weighted running average
+        self.merge = MergeGate(d) if c.streaming.enabled else None
 
-    def _nodes(self, h: Tensor, mask: Tensor, ratio: float | Tensor):
-        """Encode and write. Returns node states, node validity, aux, ratio tensor, token counts."""
+    def _nodes_stream(self, h: Tensor, mask: Tensor, ratio: float | Tensor, chunks: int):
+        """Build the node memory incrementally from ``chunks`` consecutive pieces of the context.
+
+        Each piece is encoded on its own (it cannot see later text) and folded into the existing
+        nodes by :func:`stream_update`. The node budget grows with the text seen so far, so the
+        final memory has the same size as in the one-shot case.
+        """
+        b, n, _ = h.shape
+        ratio_t = torch.as_tensor(ratio, dtype=torch.float32, device=h.device).expand(b)
+        n_tokens = mask.sum(1)
+        pool_ratio = ratio_t / self.cf if self.adaptive else ratio_t
+        seg = self.encoder.seg_len
+        step = math.ceil(math.ceil(n / chunks) / seg) * seg  # chunk length, a multiple of seg_len
+        total_units = torch.ceil(n_tokens.float() / seg).clamp(min=1)
+        state, lbs, z_valid = None, [], None
+        for lo in range(0, n, step):
+            hc, mc = h[:, lo : lo + step], mask[:, lo : lo + step]
+            has = mc.any(1)
+            safe = mc.clone()
+            safe[:, 0] |= ~has  # keep the encoder away from fully masked rows
+            u, u_valid = self.encoder(hc, safe, pos_offset=lo // seg)
+            u_valid = u_valid & has[:, None]
+            seen = torch.clamp(n_tokens, max=lo + step)
+            counts = num_slots(seen, pool_ratio, self.k_max)
+            pos = (lo // seg + torch.arange(u.shape[1], device=h.device))[None, :] / total_units[
+                :, None
+            ]
+            state, lb, z_valid = stream_update(
+                self.writer, self.merge, state, u, u_valid, pos, counts, ratio_t
+            )
+            lbs.append(lb)
+        keys = self.writer.node_keys(state.z.shape[1], ratio_t)
+        z = self.writer.finalize(state.z, keys, z_valid)
+        seen_any = state.mass > 1e-6
+        centroid = torch.where(
+            seen_any, state.pos_sum / state.mass.clamp(min=1e-6), torch.full_like(state.mass, 2.0)
+        )
+        aux = {
+            "lb": torch.stack(lbs).mean(),
+            "centroid": centroid,
+            "mass": state.mass,
+            "n_tokens": n_tokens.float(),
+        }
+        return z, z_valid, aux, ratio_t
+
+    def _nodes(self, h: Tensor, mask: Tensor, ratio: float | Tensor, chunks: int = 1):
+        """Encode and write. Returns node states, node validity, aux and the ratio tensor."""
+        if chunks > 1:
+            return self._nodes_stream(h, mask, ratio, chunks)
         b = h.shape[0]
         ratio_t = torch.as_tensor(ratio, dtype=torch.float32, device=h.device).expand(b)
         n_tokens = mask.sum(1)
@@ -103,8 +156,8 @@ class RoutedCompressor(nn.Module):
             gate = torch.where(empty[:, None], rescue.detach(), gate)
         return gate
 
-    def forward(self, h: Tensor, mask: Tensor, ratio: float | Tensor) -> Memory:
-        z, z_valid, aux, _ = self._nodes(h, mask, ratio)
+    def forward(self, h: Tensor, mask: Tensor, ratio: float | Tensor, chunks: int = 1) -> Memory:
+        z, z_valid, aux, _ = self._nodes(h, mask, ratio, chunks)
         gate = self._open(z, z_valid, aux)
         return self._finish(z, gate, aux)
 
@@ -144,8 +197,8 @@ class GraphCompressor(RoutedCompressor):
         self.gnn = RelationalMP(d, c.edges.relations, c.gnn.layers) if c.gnn.enabled else None
         self.projector = Projector(d, d_llm, embed_norm, pe_dim=self.pe_steps)
 
-    def forward(self, h: Tensor, mask: Tensor, ratio: float | Tensor) -> Memory:
-        z, z_valid, aux, _ = self._nodes(h, mask, ratio)
+    def forward(self, h: Tensor, mask: Tensor, ratio: float | Tensor, chunks: int = 1) -> Memory:
+        z, z_valid, aux, _ = self._nodes(h, mask, ratio, chunks)
         gate = self._open(z, z_valid, aux)
         active = gate > 0
         z = z * gate.unsqueeze(-1)
