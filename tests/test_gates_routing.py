@@ -114,7 +114,9 @@ def test_gradients_reach_router_values_and_keys():
     u, valid = _units()
     w = _writer().train()
     z, _, aux = w(u, valid, torch.tensor([6, 4]), torch.tensor([3.0, 3.0]))
-    (z.sum() + aux["lb"]).backward()
+    # z ends in a LayerNorm, whose output sums to a constant, so weight the outputs randomly
+    weights = torch.randn(z.shape, generator=torch.Generator().manual_seed(0))
+    ((z * weights).sum() + aux["lb"]).backward()
     assert w.route.weight.grad.abs().sum() > 0
     assert w.value.weight.grad.abs().sum() > 0 and w.keys.grad.abs().sum() > 0
 
