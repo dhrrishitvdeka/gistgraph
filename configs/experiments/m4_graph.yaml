@@ -1,0 +1,10 @@
+﻿base: m3_routed_adaptive.yaml
+name: graph
+out_dir: runs/m4_graph
+compressor:
+  type: graph
+  edges: {enabled: true, mode: learned, relations: 4, rank: 64, sparsifier: entmax15, max_deg: 8}
+  gnn: {enabled: true, layers: 2}
+  projector: {pe: rw, pe_steps: 8}
+loss:
+  edge_l0: 0.01
