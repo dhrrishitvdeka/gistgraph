@@ -82,6 +82,91 @@ class FrozenLM(nn.Module):
         finally:
             self.model.eval()
 
+    def _hidden(self, embeds: Tensor, mask: Tensor) -> Tensor:
+        self.model.train(self.grad_ckpt and torch.is_grad_enabled())
+        try:
+            return self.model.model(inputs_embeds=embeds, attention_mask=mask, use_cache=False)[0]
+        finally:
+            self.model.eval()
+
+    def build_answer_inputs(
+        self,
+        questions: list[str],
+        prefixes: list[Tensor],
+        answers: list[Tensor],
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        """Right-padded ``pre + soft prefix + post + answer`` embeddings for teacher forcing.
+
+        Returns ``embeds [B, L, d]``, ``mask [B, L]`` and ``starts [B]``, the index where each
+        answer begins. Token ``t`` of the answer is predicted by position ``starts + t - 1``.
+        """
+        seqs, starts = [], []
+        for q, prefix, ans in zip(questions, prefixes, answers, strict=True):
+            pre, post = split_prompt(self.tokenizer, q)
+            dtype = self.model.get_input_embeddings().weight.dtype
+            parts = [self.embed(self.encode_text(pre)), prefix.to(dtype)]
+            parts.append(self.embed(self.encode_text(post)))
+            starts.append(sum(p.shape[0] for p in parts))
+            parts.append(self.embed(ans))
+            seqs.append(torch.cat(parts, dim=0))
+        max_len = max(s.shape[0] for s in seqs)
+        embeds = seqs[0].new_zeros(len(seqs), max_len, seqs[0].shape[1])
+        mask = torch.zeros(len(seqs), max_len, dtype=torch.long, device=embeds.device)
+        for i, s in enumerate(seqs):
+            embeds[i, : s.shape[0]] = s
+            mask[i, : s.shape[0]] = 1
+        return embeds, mask, torch.tensor(starts, device=embeds.device)
+
+    def answer_logits(
+        self, embeds: Tensor, mask: Tensor, starts: Tensor, lens: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        """Logits ``[B, T, V]`` at the answer positions only, plus a ``[B, T]`` validity mask.
+
+        Applying the LM head only where it is needed avoids a ``[B, L, V]`` logits tensor, which
+        would be huge for a 150k-token vocabulary.
+        """
+        hidden = self._hidden(embeds, mask)
+        t = int(lens.max())
+        steps = torch.arange(t, device=hidden.device)[None, :]
+        valid = steps < lens[:, None]
+        pos = (starts[:, None] - 1 + steps).clamp(max=hidden.shape[1] - 1)
+        picked = hidden.gather(1, pos.unsqueeze(-1).expand(-1, -1, hidden.shape[-1]))
+        return self.model.get_output_embeddings()(picked), valid
+
+    @torch.no_grad()
+    def generate_scored(
+        self, embeds: Tensor, mask: Tensor, max_new_tokens: int, topk: int
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """Greedy generation that also returns the top-k logits at every step.
+
+        Returns ``ids [B, T]``, ``lens [B]`` (tokens up to and including the first end token),
+        ``topk_idx [B, T, k]`` and ``topk_logits [B, T, k]``.
+        """
+        self.model.eval()
+        out = self.model.generate(
+            inputs_embeds=embeds,
+            attention_mask=mask,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            repetition_penalty=1.0,
+            use_cache=True,
+            pad_token_id=self.tokenizer.pad_token_id,
+            output_scores=True,
+            return_dict_in_generate=True,
+        )
+        ids = out.sequences
+        scores = torch.stack(out.scores, dim=1)  # [B, T, V]
+        top = scores.float().topk(topk, dim=-1)
+        eos = self.model.generation_config.eos_token_id
+        eos = [eos] if isinstance(eos, int) else list(eos or [self.tokenizer.eos_token_id])
+        is_end = torch.zeros_like(ids, dtype=torch.bool)
+        for e in eos:
+            is_end |= ids == e
+        first_end = torch.where(
+            is_end.any(1), is_end.float().argmax(1), torch.full_like(ids[:, 0], ids.shape[1] - 1)
+        )
+        return ids, first_end + 1, top.indices, top.values
+
     def encode_text(self, text: str) -> Tensor:
         ids = self.tokenizer(text, add_special_tokens=False, return_tensors="pt").input_ids
         return ids[0].to(self.device)
