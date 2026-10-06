@@ -8,6 +8,15 @@ from torch import Tensor, nn
 from gistgraph.data.prompts import split_prompt
 
 
+def pick_dtype(name: str) -> torch.dtype:
+    """Resolve a dtype name. ``auto`` is bf16 where supported, fp16 on older GPUs, else fp32."""
+    if name != "auto":
+        return getattr(torch, name)
+    if not torch.cuda.is_available():
+        return torch.float32
+    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+
+
 def pad_left(seqs: list[Tensor]) -> tuple[Tensor, Tensor]:
     """Left-pad a list of ``[L_i, d]`` embedding sequences. Returns ``[B, L, d]`` and a mask."""
     max_len = max(s.shape[0] for s in seqs)
@@ -44,7 +53,7 @@ class FrozenLM(nn.Module):
     def from_pretrained(cls, name: str, dtype: str = "auto", grad_ckpt: bool = False, device=None):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
-        torch_dtype = "auto" if dtype == "auto" else getattr(torch, dtype)
+        torch_dtype = pick_dtype(dtype)
         model = AutoModelForCausalLM.from_pretrained(name, dtype=torch_dtype)
         tokenizer = AutoTokenizer.from_pretrained(name)
         obj = cls(model, tokenizer, grad_ckpt=grad_ckpt)

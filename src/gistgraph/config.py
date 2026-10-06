@@ -130,6 +130,7 @@ class EvalConfig:
 
 @dataclass
 class Config:
+    name: str = "run"  # label for this method in result tables
     seed: int = 0
     out_dir: str = "runs/default"
     llm: LLMConfig = field(default_factory=LLMConfig)
