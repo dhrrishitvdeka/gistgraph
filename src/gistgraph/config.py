@@ -111,6 +111,12 @@ class TrainConfig:
     warmup: int = 300
     ckpt_every: int = 500
     amp: bool = True
+    ratios: list[float] = field(default_factory=lambda: [2.0, 3.0, 4.0, 5.0])  # sampled per batch
+    n_teacher: int = 4000  # training examples with cached teacher outputs
+    recon_tokens: int = 48  # context tokens the LLM must rebuild for the reconstruction loss
+    answer_tokens: int = 24  # teacher answer length kept for distillation
+    eval_every: int = 500
+    n_dev: int = 100
 
 
 @dataclass
