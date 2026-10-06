@@ -2,7 +2,20 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "Gist Graph"
 type: software
+version: 0.1.0
 license: Apache-2.0
+repository-code: "https://github.com/dhrrishitvdeka/gistgraph"
+url: "https://github.com/dhrrishitvdeka/gistgraph"
+abstract: >-
+  Gist Graph compresses a long text context into a small sparse latent graph that a frozen
+  language model reads as a soft prompt. It routes text segments into latent nodes, induces typed
+  edges between them without a parser, passes messages over the graph, and is trained by
+  distilling the model's answers given the full context.
+keywords:
+  - context compression
+  - soft prompts
+  - latent graphs
+  - long context
 authors:
   - family-names: Deka
     given-names: Dhrrishit V
