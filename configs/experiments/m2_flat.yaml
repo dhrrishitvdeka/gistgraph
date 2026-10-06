@@ -1,0 +1,27 @@
+﻿base: ../base.yaml
+name: flat
+out_dir: runs/m2_flat
+compressor:
+  type: flat
+  encoder: {d: 512, layers: 2, seg_len: 1}
+data:
+  train: [hotpotqa, 2wiki, squad]
+  eval: [hotpotqa, 2wiki, squad]
+  n_eval: 200
+train:
+  ratios: [2, 3, 4, 5]
+  n_teacher: 3000
+  steps: 1500
+  grad_accum: 4
+  batch: 4
+  lr: 3.0e-4
+  warmup: 100
+  ckpt_every: 250
+  eval_every: 500
+  n_dev: 60
+loss:
+  recon_weight: 1.0
+  recon_anneal_frac: 0.3
+  qa_ce_weight: 0.0
+eval:
+  ratios: [2, 3, 4, 5]
