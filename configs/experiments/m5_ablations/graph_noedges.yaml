@@ -1,0 +1,6 @@
+﻿# Control for H1: same parameters as the graph model, but no edges (messages are empty).
+base: ../m4_graph.yaml
+name: graph_noedges
+out_dir: runs/m5_graph_noedges
+compressor:
+  edges: {enabled: false}

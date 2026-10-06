@@ -1,0 +1,6 @@
+﻿# Control for H1: random sparse graph with the same degree and relation count.
+base: ../m4_graph.yaml
+name: graph_random
+out_dir: runs/m5_graph_random
+compressor:
+  edges: {enabled: true, mode: random}
