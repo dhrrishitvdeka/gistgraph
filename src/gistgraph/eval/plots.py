@@ -60,6 +60,7 @@ def retention_figure(rows: list[dict], path: str | Path, methods: list[str] | No
 def budget_figure(rows: list[dict], methods: list[str], ratio: float, path: str | Path) -> Path:
     """Distribution of per-document compression for each method at one target ratio (H2)."""
     fig, ax = plt.subplots(figsize=(5.2, 3.6))
+    plotted = False
     for i, m in enumerate(methods):
         frac = [
             r["n_comp"] / max(r["n_orig"], 1)
@@ -68,10 +69,12 @@ def budget_figure(rows: list[dict], methods: list[str], ratio: float, path: str 
         ]
         if frac:
             ax.hist(frac, bins=30, alpha=0.55, color=PALETTE[i % len(PALETTE)], label=m)
+            plotted = True
     ax.axvline(1 / ratio, color="#888888", linestyle=":", linewidth=1)
     ax.set_xlabel("memory length / context length")
     ax.set_ylabel("documents")
-    ax.legend(frameon=False, fontsize=8)
+    if plotted:
+        ax.legend(frameon=False, fontsize=8)
     fig.tight_layout()
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
