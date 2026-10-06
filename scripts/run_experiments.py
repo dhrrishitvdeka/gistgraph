@@ -33,6 +33,7 @@ def main() -> None:
     ap.add_argument("configs", nargs="+", type=Path)
     ap.add_argument("--wait-pid", type=int, default=None)
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--stream-eval", type=int, default=0, help="also evaluate in streamed mode")
     ap.add_argument("--set", nargs="*", default=[], help="overrides applied to every run")
     args = ap.parse_args()
 
@@ -51,6 +52,10 @@ def main() -> None:
         code = subprocess.call(cmd)
         if code != 0:
             print(f"{path} failed with exit code {code}; continuing", flush=True)
+        elif args.stream_eval and cfg.compressor.type != "flat":
+            stream = [sys.executable, "-m", "gistgraph", "eval", "--config", str(path)]
+            stream += ["--device", args.device, *args.set, f"eval.stream_chunks={args.stream_eval}"]
+            subprocess.call(stream)
 
 
 if __name__ == "__main__":
