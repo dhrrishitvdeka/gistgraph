@@ -6,6 +6,10 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-06
+
+First public release (pre-release: no compressor has been trained yet).
+
 ### Added
 - Config system: typed YAML schema with inheritance, dotted overrides and strict validation.
 - Evaluation harness with SQuAD-style EM and F1, achieved-ratio reporting and retention tables.
@@ -22,3 +26,7 @@ All notable changes are recorded here. The format follows
 
 ### Status
 - No compressor has been fully trained yet, so no performance claim is made for the method.
+- Non-learned baselines are evaluated on HotpotQA only (partial); see `docs/results/results.md`.
+
+[Unreleased]: https://github.com/dhrrishitvdeka/gistgraph/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/dhrrishitvdeka/gistgraph/releases/tag/v0.1.0
