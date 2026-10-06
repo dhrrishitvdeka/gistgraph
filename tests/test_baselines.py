@@ -64,9 +64,16 @@ def test_extractive_within_budget_and_original_order(example, tok, scorer, ratio
     out = Extractive(scorer).compress(example, ratio, tok)
     total = sum(n_tokens(tok, s) for s in split_sentences(example.context))
     assert 0 < n_tokens(tok, out) <= token_budget(total, ratio)
-    # every kept sentence appears in order in the original
-    pos = [example.context.index(s) for s in split_sentences(out)]
-    assert pos == sorted(pos)
+    # the output's words are an in-order subsequence of the original's words
+    words = iter(example.context.split())
+    assert all(w in words for w in out.split())
+
+
+@pytest.mark.parametrize("scorer", ["lead", "textrank", "bm25"])
+def test_extractive_fills_budget_exactly(example, tok, scorer):
+    out = Extractive(scorer).compress(example, 4, tok)
+    total = sum(n_tokens(tok, s) for s in split_sentences(example.context))
+    assert n_tokens(tok, out) == token_budget(total, 4)
 
 
 def test_extractive_bm25_keeps_answer_sentence(example, tok):

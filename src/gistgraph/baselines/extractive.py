@@ -92,13 +92,20 @@ class Extractive:
         lengths = [len(tokenizer.encode(s)) for s in sentences]
         budget = token_budget(sum(lengths), ratio)
         order = np.argsort(-self._scores(sentences, ex.question), kind="stable")
-        kept: list[int] = []
+        pieces: dict[int, str] = {}
         used = 0
         for i in order:
+            i = int(i)
             if used + lengths[i] <= budget:
-                kept.append(int(i))
+                pieces[i] = sentences[i]
                 used += lengths[i]
-        if not kept and sentences:  # budget smaller than any sentence: cut the best one
-            best = int(order[0])
-            return tokenizer.decode(tokenizer.encode(sentences[best])[:budget])
-        return " ".join(sentences[i] for i in sorted(kept))
+        # Fill the leftover budget with a cut of the best sentence that did not fit, so the
+        # achieved ratio lands on the target instead of overshooting it.
+        left = budget - used
+        if left > 0:
+            for i in order:
+                i = int(i)
+                if i not in pieces:
+                    pieces[i] = tokenizer.decode(tokenizer.encode(sentences[i])[:left])
+                    break
+        return " ".join(pieces[i] for i in sorted(pieces))
