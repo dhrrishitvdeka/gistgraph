@@ -7,7 +7,23 @@ from pathlib import Path
 
 from gistgraph.config import load_config
 
-REPRODUCE = {"m1": "configs/experiments/m1_baselines.yaml"}
+EXP = "configs/experiments"
+# milestone -> (command, configs). Each is the headline experiment of that milestone.
+REPRODUCE = {
+    "m1": ("baselines", [f"{EXP}/m1_baselines.yaml"]),
+    "m2": ("train", [f"{EXP}/m2_flat.yaml"]),
+    "m3": ("train", [f"{EXP}/m3_routed_fixed.yaml", f"{EXP}/m3_routed_adaptive.yaml"]),
+    "m4": ("train", [f"{EXP}/m4_graph.yaml"]),
+    "m5": (
+        "train",
+        [
+            f"{EXP}/m5_ablations/graph_noedges.yaml",
+            f"{EXP}/m5_ablations/graph_random.yaml",
+            f"{EXP}/m5_ablations/graph_gumbel.yaml",
+            f"{EXP}/m5_ablations/graph_stream.yaml",
+        ],
+    ),
+}
 
 
 def _cmd_baselines(args) -> None:
@@ -70,10 +86,10 @@ def _cmd_report(args) -> None:
 
 
 def _cmd_reproduce(args) -> None:
-    if args.milestone not in REPRODUCE:
-        raise SystemExit(f"nothing to reproduce for {args.milestone!r}; known: {sorted(REPRODUCE)}")
-    args.config = REPRODUCE[args.milestone]
-    _cmd_baselines(args)
+    command, configs = REPRODUCE[args.milestone]
+    for config in configs:
+        args.config = Path(config)
+        {"baselines": _cmd_baselines, "train": _cmd_train}[command](args)
 
 
 def main(argv: list[str] | None = None) -> None:
