@@ -40,6 +40,12 @@ def _cmd_eval(args) -> None:
     print(f"report written to {evaluate_learned(cfg, lm, comp)}")
 
 
+def _cmd_report(args) -> None:
+    from gistgraph.eval.results import build_results
+
+    print(f"results written to {build_results(args.runs, args.out)}")
+
+
 def _cmd_reproduce(args) -> None:
     if args.milestone not in REPRODUCE:
         raise SystemExit(f"nothing to reproduce for {args.milestone!r}; known: {sorted(REPRODUCE)}")
@@ -68,6 +74,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--device", default="cuda")
     p.add_argument("overrides", nargs="*")
     p.set_defaults(func=_cmd_eval)
+
+    p = sub.add_parser("report", help="build docs/results from finished run directories")
+    p.add_argument("runs", nargs="+", type=Path)
+    p.add_argument("--out", type=Path, default=Path("docs/results"))
+    p.set_defaults(func=_cmd_report)
 
     p = sub.add_parser("reproduce", help="rerun a milestone's headline experiment")
     p.add_argument("milestone", choices=sorted(REPRODUCE))
