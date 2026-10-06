@@ -28,11 +28,14 @@ def entmax15(x: Tensor) -> Tensor:
 
 
 def cap_degree(weights: Tensor, max_deg: int) -> Tensor:
-    """Keep each row's ``max_deg`` largest weights and rescale to the row's original total."""
+    """Keep each row's ``max_deg`` largest weights and rescale to the row's original total.
+
+    Chosen by index (not by a value threshold) so ties can never push a row above ``max_deg``.
+    """
     if max_deg >= weights.shape[-1]:
         return weights
-    kth = weights.topk(max_deg, dim=-1).values[..., -1:]
-    kept = weights * (weights >= kth)
+    top = weights.topk(max_deg, dim=-1).indices
+    kept = weights * torch.zeros_like(weights).scatter(-1, top, 1.0)
     scale = weights.sum(-1, keepdim=True) / kept.sum(-1, keepdim=True).clamp(min=1e-9)
     return kept * scale
 
@@ -74,8 +77,13 @@ class EdgeInducer(nn.Module):
         """``z``: ``[B, K, d]``; ``valid``: ``[B, K]`` bool. Returns ``A [B, R, K, K]`` and aux.
 
         ``A[b, p, i, j]`` is the weight with which node ``i`` reads from node ``j`` over relation
-        ``p``. Self-loops are excluded.
+        ``p``. Self-loops are excluded. Runs in float32 even under mixed precision: low-precision
+        scores produce many ties and the entmax sort/cumsum needs the extra range.
         """
+        with torch.autocast(device_type=z.device.type, enabled=False):
+            return self._induce(z, valid)
+
+    def _induce(self, z: Tensor, valid: Tensor) -> tuple[Tensor, dict]:
         b, k, _ = z.shape
         r = self.relations
         z = z.float()
