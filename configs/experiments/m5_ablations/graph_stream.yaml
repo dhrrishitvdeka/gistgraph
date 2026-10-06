@@ -1,0 +1,6 @@
+﻿# H4: trained with incremental updates (4 chunks) and a learned merge gate.
+base: ../m4_graph.yaml
+name: graph_stream
+out_dir: runs/m5_graph_stream
+compressor:
+  streaming: {enabled: true, chunks: 4}
