@@ -114,11 +114,21 @@ class TrainConfig:
 
 
 @dataclass
+class EvalConfig:
+    methods: list[str] = field(default_factory=lambda: ["truncation_head"])
+    ratios: list[float] = field(default_factory=lambda: [2.0, 3.0, 4.0, 5.0])
+    split: str = "validation"
+    batch_size: int = 8
+    max_new_tokens: int = 32
+
+
+@dataclass
 class Config:
     seed: int = 0
     out_dir: str = "runs/default"
     llm: LLMConfig = field(default_factory=LLMConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    eval: EvalConfig = field(default_factory=EvalConfig)
     compressor: CompressorConfig = field(default_factory=CompressorConfig)
     loss: LossConfig = field(default_factory=LossConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
