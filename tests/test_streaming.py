@@ -28,8 +28,9 @@ def _writer():
 def test_merge_gate_starts_as_mass_weighted_average():
     gate = MergeGate(D)
     z_old, z_new = torch.randn(1, 5, D), torch.randn(1, 5, D)
-    m_old, m_new = torch.tensor([[3.0, 1.0, 2.0, 5.0, 0.5]]), torch.tensor(
-        [[1.0, 1.0, 6.0, 5.0, 0.5]]
+    m_old, m_new = (
+        torch.tensor([[3.0, 1.0, 2.0, 5.0, 0.5]]),
+        torch.tensor([[1.0, 1.0, 6.0, 5.0, 0.5]]),
     )
     alpha = gate(z_old, z_new, m_old, m_new).squeeze(-1)
     assert torch.allclose(alpha, m_new / (m_old + m_new), atol=1e-4)
