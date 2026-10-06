@@ -61,6 +61,48 @@ def test_generate_returns_one_string_per_example(lm):
     assert len(outs) == 2 and all(isinstance(o, str) for o in outs)
 
 
+def _answer_batch(lm):
+    prefixes = [torch.randn(3, lm.d_model, requires_grad=True), torch.randn(5, lm.d_model)]
+    answers = [torch.tensor([7, 8, 9]), torch.tensor([11, 12])]
+    embeds, mask, starts = lm.build_answer_inputs(["why?", "who is it?"], prefixes, answers)
+    return prefixes, answers, embeds, mask, starts
+
+
+def test_build_answer_inputs_layout(lm):
+    prefixes, answers, embeds, mask, starts = _answer_batch(lm)
+    assert mask.sum(1).tolist() == [s + len(a) for s, a in zip(starts.tolist(), answers)]
+    assert torch.allclose(embeds[0, starts[0] : starts[0] + 3], lm.embed(answers[0]))
+    assert torch.allclose(embeds[1, starts[1] : starts[1] + 2], lm.embed(answers[1]))
+
+
+def test_answer_logits_match_full_forward_at_answer_positions(lm):
+    _, answers, embeds, mask, starts = _answer_batch(lm)
+    lens = torch.tensor([3, 2])
+    got, valid = lm.answer_logits(embeds, mask, starts, lens)
+    full = lm.forward_embeds(embeds, mask)
+    assert got.shape == (2, 3, full.shape[-1]) and valid.tolist() == [[1, 1, 1], [1, 1, 0]]
+    for b, n in enumerate(lens.tolist()):
+        for t in range(n):
+            assert torch.allclose(got[b, t], full[b, starts[b] - 1 + t], atol=1e-5)
+
+
+def test_answer_logits_pass_gradient_to_prefix(lm):
+    prefixes, _, embeds, mask, starts = _answer_batch(lm)
+    # embeds were built from the prefixes, so rebuild with grad tracking intact
+    logits, valid = lm.answer_logits(embeds, mask, starts, torch.tensor([3, 2]))
+    logits.sum().backward()
+    assert prefixes[0].grad is not None and prefixes[0].grad.abs().sum() > 0
+
+
+def test_generate_scored_shapes_and_lengths(lm):
+    embeds, mask = lm.build_inputs(["a?", "bb?"], [None, None], contexts=["x", "yy"])
+    ids, lens, idx, logits = lm.generate_scored(embeds, mask, max_new_tokens=4, topk=5)
+    assert ids.shape[0] == 2 and idx.shape == (2, ids.shape[1], 5) == logits.shape
+    assert ((lens >= 1) & (lens <= ids.shape[1])).all()
+    # top-1 of the recorded logits is the greedy token that was emitted
+    assert torch.equal(idx[:, :, 0], ids)
+
+
 def test_checkpointed_forward_matches_plain(lm):
     prefix = torch.randn(3, lm.d_model, requires_grad=True)
     embeds, mask = lm.build_inputs(["why?"], [prefix])

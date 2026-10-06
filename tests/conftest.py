@@ -32,6 +32,7 @@ class CharTokenizer:
     eos_token = "<eos>"
     pad_token = "<eos>"
     pad_token_id = 0
+    eos_token_id = 0
 
     def _ids(self, text):
         return [(ord(c) % 90) + 5 for c in text]
