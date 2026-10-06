@@ -1,4 +1,4 @@
-﻿"""Small builders shared by several test modules."""
+"""Small builders shared by several test modules."""
 
 from gistgraph.data.schema import Example
 

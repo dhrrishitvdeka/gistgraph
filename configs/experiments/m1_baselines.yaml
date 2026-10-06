@@ -1,4 +1,4 @@
-﻿base: ../base.yaml
+base: ../base.yaml
 out_dir: runs/m1_baselines
 eval:
   methods:

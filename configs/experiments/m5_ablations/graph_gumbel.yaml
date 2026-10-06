@@ -1,4 +1,4 @@
-﻿# Ablation: Gumbel top-k edge selection instead of entmax.
+# Ablation: Gumbel top-k edge selection instead of entmax.
 base: ../m4_graph.yaml
 name: graph_gumbel
 out_dir: runs/m5_graph_gumbel

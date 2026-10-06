@@ -1,4 +1,4 @@
-﻿base: ../base.yaml
+base: ../base.yaml
 name: flat
 out_dir: runs/m2_flat
 compressor:

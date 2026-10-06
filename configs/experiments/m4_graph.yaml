@@ -1,4 +1,4 @@
-﻿base: m3_routed_adaptive.yaml
+base: m3_routed_adaptive.yaml
 name: graph
 out_dir: runs/m4_graph
 compressor:

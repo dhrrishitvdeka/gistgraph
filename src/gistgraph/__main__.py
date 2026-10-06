@@ -1,3 +1,3 @@
-﻿from gistgraph.cli import main
+from gistgraph.cli import main
 
 main()

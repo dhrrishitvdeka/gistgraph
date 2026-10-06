@@ -1,4 +1,4 @@
-﻿base: m2_flat.yaml
+base: m2_flat.yaml
 name: routed_adaptive
 out_dir: runs/m3_routed_adaptive
 compressor:
