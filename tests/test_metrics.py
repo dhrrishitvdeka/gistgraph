@@ -32,7 +32,7 @@ def test_f1_no_overlap_and_empty():
 
 
 def test_f1_counts_repeated_tokens_once_per_gold_occurrence():
-    assert f1_score("a a b", "b c") == pytest.approx(0.4)  # overlap 1, P=1/2 (a removed), R=1/2
+    assert f1_score("x x b", "b c") == pytest.approx(0.4)  # overlap 1, P=1/3, R=1/2
 
 
 def test_best_over_golds():
