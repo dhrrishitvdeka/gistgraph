@@ -71,6 +71,21 @@ def test_entmax_ignores_masked_large_negatives():
     assert p[2:].sum() == 0 and p.sum().item() == pytest.approx(1.0, abs=1e-5)
 
 
+def test_cap_degree_never_exceeds_max_with_ties():
+    w = torch.full((2, 40), 0.025)  # all tied
+    out = cap_degree(w, 5)
+    assert ((out > 0).sum(-1) == 5).all() and torch.allclose(out.sum(-1), w.sum(-1))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA autocast")
+def test_edge_induction_stays_float32_under_autocast():
+    z, valid = _nodes()
+    ind = EdgeInducer(D, R, rank=8).cuda()
+    with torch.autocast("cuda", dtype=torch.bfloat16):
+        adj, _ = ind(z.cuda(), valid.cuda())
+    assert adj.dtype == torch.float32
+
+
 def test_cap_degree_keeps_top_and_total_mass():
     w = torch.tensor([[0.4, 0.3, 0.2, 0.1, 0.0]])
     out = cap_degree(w, 2)
