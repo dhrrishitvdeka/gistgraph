@@ -37,8 +37,12 @@ class SegmentEncoder(nn.Module):
         self.blocks = nn.TransformerEncoder(layer, layers, enable_nested_tensor=False)
         self.out_norm = nn.LayerNorm(d)
 
-    def forward(self, h: Tensor, mask: Tensor) -> tuple[Tensor, Tensor]:
-        """``h``: ``[B, N, d_in]``; ``mask``: ``[B, N]`` bool/0-1 (1 = real token)."""
+    def forward(self, h: Tensor, mask: Tensor, pos_offset: int = 0) -> tuple[Tensor, Tensor]:
+        """``h``: ``[B, N, d_in]``; ``mask``: ``[B, N]`` bool/0-1 (1 = real token).
+
+        ``pos_offset`` shifts the position codes (in segments), so a chunk of a longer document
+        keeps its absolute positions when it is encoded on its own.
+        """
         mask = mask.bool()
         x = self.inp(h.float())
         if self.seg_len > 1:
@@ -53,6 +57,6 @@ class SegmentEncoder(nn.Module):
             weights = ms.unsqueeze(-1).to(x.dtype)
             x = (xs * weights).sum(2) / weights.sum(2).clamp(min=1)
             mask = ms.any(-1)
-        x = x + sinusoidal_positions(x.shape[1], self.d, x.device)
+        x = x + sinusoidal_positions(x.shape[1] + pos_offset, self.d, x.device)[pos_offset:]
         x = self.blocks(x, src_key_padding_mask=~mask)
         return self.out_norm(x), mask
