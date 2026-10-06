@@ -153,7 +153,7 @@ def test_rate_controller_converges_on_toy_problem():
         loss.backward()
         opt.step()
         rc.update(4.0, float(frac.detach()))
-    assert abs(float(torch.sigmoid(theta)) - target) < 0.03
+    assert abs(float(torch.sigmoid(theta).detach()) - target) < 0.03
 
 
 def test_rate_penalty_is_lagrangian_plus_quadratic():
