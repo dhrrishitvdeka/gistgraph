@@ -48,8 +48,10 @@ class EncoderConfig:
 class WriterConfig:
     kind: str = "flat"  # flat | routed
     top_k: int = 2
-    capacity_factor: float = 1.25
+    capacity_factor: float = 1.5  # adaptive: candidate nodes = capacity_factor * N / ratio
     adaptive: bool = False
+    router_noise: float = 0.1
+    gate_init: float = 2.0  # initial hard-concrete log-alpha (gates start mostly open)
 
 
 @dataclass
@@ -94,12 +96,14 @@ class CompressorConfig:
 class LossConfig:
     kd_temp: float = 1.0
     kd_topk: int = 64
-    rate_dual_lr: float = 0.01
+    rate_dual_lr: float = 0.05
+    rate_quad: float = 10.0  # augmented-Lagrangian weight that damps the rate controller
     edge_l0: float = 1e-4
     recon_weight: float = 1.0
     recon_anneal_frac: float = 0.3
     lb_weight: float = 0.01
     qa_ce_weight: float = 0.2
+    rate_start_frac: float = 0.2  # fraction of training before the rate penalty switches on
 
 
 @dataclass
