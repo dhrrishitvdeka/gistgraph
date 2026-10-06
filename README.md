@@ -64,7 +64,7 @@ python -m gistgraph report runs/*                     # docs/results/results.md 
 ```
 
 `scripts/run_experiments.py` runs several configs in sequence and skips finished ones; see
-[docs/design/m5.md](docs/design/m5.md) for the full list and a smoke test of each stage.
+[docs/design/m5.md](docs/design/m5.md) for the full list of commands.
 
 ## Milestones and notes
 
