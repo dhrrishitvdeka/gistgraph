@@ -41,9 +41,11 @@ Controls for each (no edges, random graph, fixed rate, flat slots, one-shot) are
 ## Install
 
 ```bash
+git clone https://github.com/dhrrishitvdeka/gistgraph.git
+cd gistgraph
 python -m venv .venv
 . .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"     # add ,baselines for LLMLingua-2
+pip install -e ".[dev]"     # use ".[dev,baselines]" to include LLMLingua-2
 pytest
 ruff check . && ruff format --check .
 ```
