@@ -1,5 +1,9 @@
 # Gist Graph
 
+[![CI](https://github.com/dhrrishitvdeka/gistgraph/actions/workflows/ci.yml/badge.svg)](https://github.com/dhrrishitvdeka/gistgraph/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)
+
 Compress a long text context into a small **latent graph** that a frozen LLM reads as a soft prompt,
 aiming to keep about 90% of downstream task performance at 3-5x compression.
 
@@ -94,6 +98,32 @@ configs/               base config and experiments
 tests/                 unit and integration tests
 ```
 
+## Contributing
+
+Issues and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) first; it covers the
+setup, the test and commit conventions, and how results should be reported (negative results
+included). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems should be
+reported privately, as described in [SECURITY.md](SECURITY.md). Notable changes are listed in
+[CHANGELOG.md](CHANGELOG.md).
+
+## Citation
+
+If you use this code, please cite it (GitHub's "Cite this repository" button reads
+[CITATION.cff](CITATION.cff)):
+
+```bibtex
+@software{deka_gistgraph,
+  author = {Deka, Dhrrishit V},
+  title  = {Gist Graph},
+  year   = {2026},
+  url    = {https://github.com/dhrrishitvdeka/gistgraph}
+}
+```
+
+## Author
+
+Dhrrishit V Deka ([@dhrrishitvdeka](https://github.com/dhrrishitvdeka)).
+
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
