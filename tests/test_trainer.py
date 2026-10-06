@@ -4,25 +4,13 @@ import numpy as np
 import pytest
 import torch
 
+from helpers import toy_examples
+
 from gistgraph.config import load_config
-from gistgraph.data.schema import Example
 from gistgraph.data.teacher_cache import build_teacher_cache, load_teacher_cache, make_train_items
 from gistgraph.model.compressor import build_compressor
 from gistgraph.model.projector import mean_embedding_norm
 from gistgraph.train.trainer import Trainer, pad_ids, pad_targets
-
-
-def _examples(n=4):
-    return [
-        Example(
-            id=f"e{i}",
-            context=f"the answer is {'abcdefg'[i]} and more filler text goes here for length",
-            question="what is the answer?",
-            answers=["abcdefg"[i]],
-            dataset="toy",
-        )
-        for i in range(n)
-    ]
 
 
 def _cfg(tmp_path, steps=40, **extra):
@@ -50,7 +38,7 @@ def _cfg(tmp_path, steps=40, **extra):
 
 @pytest.fixture
 def items(lm, tmp_path):
-    exs = _examples()
+    exs = toy_examples()
     path = tmp_path / "teacher.npz"
     build_teacher_cache(lm, exs, path, topk=8, max_new_tokens=4, batch_size=2)
     teacher = load_teacher_cache(path)
@@ -58,7 +46,7 @@ def items(lm, tmp_path):
 
 
 def test_teacher_cache_roundtrip(lm, tmp_path):
-    exs = _examples(3)
+    exs = toy_examples(3)
     path = tmp_path / "t.npz"
     build_teacher_cache(lm, exs, path, topk=6, max_new_tokens=3, batch_size=2)
     cache = load_teacher_cache(path)
