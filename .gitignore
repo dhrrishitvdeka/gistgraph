@@ -1,0 +1,25 @@
+﻿# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+build/
+dist/
+
+# experiment artifacts
+runs/
+cache/
+data/
+wandb/
+*.npz
+*.pt
+*.ckpt
+
+# local tooling / notes
+notes/
+.vscode/
+.idea/
+.DS_Store
