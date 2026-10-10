@@ -12,7 +12,7 @@ from gistgraph.data.datasets import fit_context, load_examples
 from gistgraph.data.schema import Example
 from gistgraph.eval.harness import read_rows, run_eval, run_text_method, write_rows
 from gistgraph.eval.report import full_context_table, retention_markdown
-from gistgraph.llm.frozen import FrozenLM
+from gistgraph.llm.frozen import FrozenLM, native_bf16
 from gistgraph.utils.fingerprint import eval_hash
 
 
@@ -23,7 +23,7 @@ def method_label(cfg: Config) -> str:
 
 
 def amp_dtype() -> torch.dtype:
-    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    return torch.bfloat16 if native_bf16() else torch.float16
 
 
 def make_prepare(lm: FrozenLM, compressor, cfg: Config, ratio: float):

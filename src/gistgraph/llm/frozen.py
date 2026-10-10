@@ -20,7 +20,17 @@ def pick_dtype(name: str) -> torch.dtype:
         return DTYPES[name]
     if not torch.cuda.is_available():
         return torch.float32
-    return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+    return torch.bfloat16 if native_bf16() else torch.float16
+
+
+def native_bf16() -> bool:
+    """bf16 in hardware (Ampere or newer). Older GPUs such as the T4 only emulate it, slowly."""
+    if not torch.cuda.is_available():
+        return False
+    try:
+        return torch.cuda.is_bf16_supported(including_emulation=False)
+    except TypeError:  # torch without the keyword
+        return torch.cuda.get_device_capability()[0] >= 8
 
 
 def pad_left(seqs: list[Tensor]) -> tuple[Tensor, Tensor]:
