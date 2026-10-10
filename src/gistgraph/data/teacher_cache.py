@@ -53,6 +53,9 @@ def build_teacher_cache(
             idx_flat.append(idx[j, :n].cpu().numpy().astype(np.int32))
             logit_flat.append(logits[j, :n].cpu().numpy().astype(np.float16))
             offsets.append(offsets[-1] + n)
+        done = min(s + batch_size, len(order))
+        if done % (batch_size * 25) < batch_size or done == len(order):
+            print(f"teacher cache: {done}/{len(order)} examples", flush=True)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.stem + ".tmp.npz")  # np.savez appends .npz to other names
