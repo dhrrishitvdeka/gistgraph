@@ -75,6 +75,30 @@ python -m gistgraph report runs/*                     # docs/results/results.md 
 `scripts/run_experiments.py` runs several configs in sequence and skips finished ones; see
 [docs/design/m5.md](docs/design/m5.md) for the full list of commands.
 
+## Use a trained model
+
+`GistGraph` wraps a trained compressor and its frozen LLM for inference, with no experiment
+harness. The pretrained model repo below will be published once it has been trained and evaluated.
+
+```python
+from gistgraph import GistGraph
+
+gg = GistGraph.from_pretrained("dhrrishitvdeka/gistgraph-qwen2.5-0.5b")  # or a local directory
+mem = gg.compress(long_text, ratio=4)        # a handful of latent nodes
+print(mem.n_nodes, mem.ratio)
+print(gg.answer("Who founded the company?", memory=mem))
+```
+
+From the command line (`MODEL` is a saved directory, a training run directory or a Hub repo id):
+
+```bash
+python -m gistgraph ask dhrrishitvdeka/gistgraph-qwen2.5-0.5b "Who founded the company?"     --context-file report.txt --ratio 4 --verbose
+python -m gistgraph export runs/m4_graph models/m4_graph   # run directory -> shareable model
+```
+
+`GistGraph.from_run(run_dir)` loads a training run directly, and `save_pretrained` /
+`push_to_hub` write the `config.json` + `compressor.safetensors` format that `from_pretrained` reads.
+
 ## Milestones and notes
 
 | | Scope | Design notes |

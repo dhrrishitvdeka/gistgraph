@@ -123,6 +123,38 @@ def _cmd_report(args) -> None:
     print(f"results written to {build_results(args.runs, args.out)}")
 
 
+def _open_model(model: str, device: str | None = None):
+    """A ``GistGraph`` from a saved directory, a training run directory or a Hub repo id."""
+    from gistgraph.api import GistGraph
+
+    if (Path(model) / "config.resolved.yaml").exists():
+        return GistGraph.from_run(model, device=device)
+    return GistGraph.from_pretrained(model, device=device)
+
+
+def _cmd_ask(args) -> None:
+    if args.context_file is not None:
+        context = Path(args.context_file).read_text(encoding="utf-8")
+    else:
+        context = args.context
+    gg = _open_model(args.model, args.device)
+    try:
+        mem = gg.compress(context, args.ratio)
+    except ValueError as err:
+        print(f"error: {err}", file=sys.stderr)
+        raise SystemExit(2) from None
+    print(gg.answer(args.question, memory=mem, max_new_tokens=args.max_new_tokens))
+    if args.verbose:
+        print(f"nodes={mem.n_nodes} tokens={mem.n_tokens} ratio={mem.ratio:.2f}")
+
+
+def _cmd_export(args) -> None:
+    from gistgraph.api import GistGraph
+
+    out = GistGraph.from_run(args.run_dir, device=args.device).save_pretrained(args.out_dir)
+    print(f"model written to {out}")
+
+
 def _cmd_reproduce(args) -> None:
     command, configs = REPRODUCE[args.milestone]
     for config in configs:
@@ -174,6 +206,24 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--device", default=device)
     p.add_argument("overrides", nargs="*")
     p.set_defaults(func=_cmd_reproduce)
+
+    p = sub.add_parser("ask", help="answer a question from a compressed context")
+    p.add_argument("model", help="saved model directory, training run directory or Hub repo id")
+    p.add_argument("question")
+    src = p.add_mutually_exclusive_group(required=True)
+    src.add_argument("--context")
+    src.add_argument("--context-file", type=Path)
+    p.add_argument("--ratio", type=_positive(float), default=4.0)
+    p.add_argument("--max-new-tokens", type=_positive(int), default=32)
+    p.add_argument("--device", default=None)
+    p.add_argument("--verbose", action="store_true", help="also print node count and ratio")
+    p.set_defaults(func=_cmd_ask)
+
+    p = sub.add_parser("export", help="convert a training run into a shareable model directory")
+    p.add_argument("run_dir", type=Path)
+    p.add_argument("out_dir", type=Path)
+    p.add_argument("--device", default="cpu")
+    p.set_defaults(func=_cmd_export)
 
     args = parser.parse_args(argv)
     args.func(args)
