@@ -17,13 +17,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
 ]
 requires-python = ">=3.10"
 dependencies = [
-    "numpy>=1.24",
+    "numpy>=1.24,<3",
     "pyyaml>=6.0",
-    "torch>=2.3",
+    "torch>=2.6",
     "transformers>=4.45",
     "datasets>=2.18",
     "huggingface_hub>=0.23",
@@ -40,7 +41,7 @@ Changelog = "https://github.com/dhrrishitvdeka/gistgraph/blob/main/CHANGELOG.md"
 baselines = ["llmlingua>=0.2.2"]
 dev = [
     "pytest>=8.0",
-    "ruff>=0.6",
+    "ruff==0.6.9",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -56,4 +57,8 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --strict-markers"
+markers = [
+    "slow: long-running tests (deselect with -m \"not slow\")",
+    "gpu: tests that need a CUDA device (skipped when none is available)",
+]

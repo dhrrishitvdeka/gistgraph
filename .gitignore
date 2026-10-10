@@ -23,3 +23,17 @@ notes/
 .vscode/
 .idea/
 .DS_Store
+
+# environment / logs / coverage
+.env
+.env.*
+.coverage
+htmlcov/
+*.log
+.ipynb_checkpoints/
+.tox/
+.nox/
+
+# model weights
+*.safetensors
+*.bin

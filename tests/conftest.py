@@ -1,9 +1,40 @@
+import re
+from pathlib import Path
+
 import pytest
-import torch
-from transformers import Qwen2Config, Qwen2ForCausalLM
 
 from gistgraph.data.schema import Example
-from gistgraph.llm.frozen import FrozenLM
+
+try:
+    import torch
+    import transformers  # noqa: F401
+except ImportError:  # torch-free environment: only the pure-Python tests can run
+    torch = None
+
+# Test modules that need torch, directly or through a gistgraph module that imports it.
+_NEEDS_TORCH = re.compile(
+    r"^\s*(import (torch|transformers)|from (torch|transformers)[\s.]"
+    r"|from gistgraph\.(?!config|data\.schema)\S+ import|import gistgraph\.)",
+    re.M,
+)
+
+collect_ignore_glob = []
+if torch is None:
+    collect_ignore_glob = [
+        p.name
+        for p in Path(__file__).parent.glob("test_*.py")
+        if _NEEDS_TORCH.search(p.read_text(encoding="utf-8"))
+    ]
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip tests marked ``gpu`` when no CUDA device is available."""
+    if torch is not None and torch.cuda.is_available():
+        return
+    skip = pytest.mark.skip(reason="needs a CUDA device")
+    for item in items:
+        if "gpu" in item.keywords:
+            item.add_marker(skip)
 
 
 class WhitespaceTokenizer:
@@ -58,6 +89,11 @@ class CharTokenizer:
 @pytest.fixture(scope="session")
 def lm():
     """A tiny randomly initialised Qwen2 behind FrozenLM, so no download is needed."""
+    pytest.importorskip("torch")
+    from transformers import Qwen2Config, Qwen2ForCausalLM
+
+    from gistgraph.llm.frozen import FrozenLM
+
     torch.manual_seed(0)
     cfg = Qwen2Config(
         vocab_size=100,
