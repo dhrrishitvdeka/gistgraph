@@ -73,3 +73,14 @@ def test_segment_paragraphs_majority():
     token_para = np.array([0, 0, 1, 1, 1, 2, 2])
     assert segment_paragraphs(token_para, 1, 3).tolist() == [0, 0, 1]
     assert segment_paragraphs(token_para, 3, 10).tolist() == [0, 1, 2]
+
+
+def test_edges_cannot_collapse_when_no_edge_dominates():
+    torch.manual_seed(0)
+    ind = EdgeInducer(32, 2, rank=8).train()
+    torch.nn.init.constant_(ind.null.bias, 1e3)  # push every node towards "no edge"
+    z = torch.randn(2, 10, 32) * 20
+    adj, _ = ind(z, torch.ones(2, 10, dtype=torch.bool))
+    assert adj.sum((1, 3)).min() > 0.04  # each node keeps a share of its best edge
+    adj.sum().backward()
+    assert ind.src.weight.grad.abs().sum() > 0 and ind.dst.weight.grad.abs().sum() > 0

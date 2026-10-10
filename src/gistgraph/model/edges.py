@@ -6,6 +6,9 @@ import torch
 from torch import Tensor, nn
 
 NEG = -1e4  # stands in for -inf: finite, so sorting and cumulative sums stay well defined
+# entmax-1.5 keeps an entry in the support while it is within 2 of the top score, so a "no edge"
+# score at most this far above the best edge always leaves that edge a non-zero weight
+NULL_CAP = 1.5
 
 
 def entmax15(x: Tensor) -> Tensor:
@@ -67,6 +70,7 @@ class EdgeInducer(nn.Module):
             sparsifier,
             max_deg,
         )
+        self.norm = nn.LayerNorm(d)
         self.src = nn.Linear(d, rank, bias=False)
         self.dst = nn.Linear(d, rank, bias=False)
         self.rel = nn.Parameter(torch.randn(relations, rank))
@@ -86,14 +90,19 @@ class EdgeInducer(nn.Module):
     def _induce(self, z: Tensor, valid: Tensor) -> tuple[Tensor, dict]:
         b, k, _ = z.shape
         r = self.relations
-        z = z.float()
+        z = self.norm(z.float())
         q, key = self.src(z), self.dst(z)
         scores = torch.einsum("bir,pr,bjr->bpij", q, self.rel, key) * self.rank**-0.5
         allowed = valid[:, None, :, None] & valid[:, None, None, :]
         allowed = allowed & ~torch.eye(k, dtype=torch.bool, device=z.device)
         scores = scores.masked_fill(~allowed, NEG)
         flat = scores.permute(0, 2, 1, 3).reshape(b, k, r * k)  # per source node i: (p, j)
-        null = self.null(z)  # [B, K, 1]
+        # "no edge" is scored relative to the node's best candidate and bounded below the gap at
+        # which entmax drops that candidate, so the top edge never gets exactly zero weight. An
+        # unbounded null score can outgrow every edge, and then no edge logit receives gradient.
+        best = flat.max(-1, keepdim=True).values.detach()
+        best = torch.where(best > NEG / 2, best, torch.zeros_like(best))  # no candidates: no edge
+        null = best + NULL_CAP * torch.tanh(self.null(z) / NULL_CAP)  # [B, K, 1]
         logits = torch.cat([flat, null], dim=-1)
 
         probs = entmax15(logits) if self.sparsifier == "entmax15" else self._gumbel_topk(logits)
