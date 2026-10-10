@@ -9,7 +9,7 @@ All notable changes are recorded here. The format follows
 ## [0.2.0] - 2026-10-10
 
 Hardening, an inference API, the edge-collapse fix found by the first training run, and a Colab
-notebook that trains, evaluates and publishes the model (pre-release: no trained model yet).
+notebook that trains, evaluates and publishes the model. No trained model is published yet.
 
 ### Added
 - Config fingerprinting: training refuses to resume into an `out_dir` trained with a different
