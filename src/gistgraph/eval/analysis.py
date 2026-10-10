@@ -7,6 +7,7 @@ F1 points (0-100). Retention is ``mean F1 of the method / mean F1 of the full co
 
 from __future__ import annotations
 
+import warnings
 from collections import defaultdict
 from pathlib import Path
 
@@ -25,7 +26,8 @@ def load_runs(dirs: list[str | Path]) -> list[dict]:
     Every learned run re-evaluates the full-context reference on the same examples, so rows are
     de-duplicated by (method, ratio, dataset, example id), keeping the first.
     """
-    seen, out = set(), []
+    seen: dict[tuple, dict] = {}
+    out, conflicts = [], 0
     for d in dirs:
         path = Path(d) / "results.jsonl"
         if not path.exists():
@@ -33,8 +35,15 @@ def load_runs(dirs: list[str | Path]) -> list[dict]:
         for r in read_rows(path):
             key = (r["method"], r["target_ratio"], r["dataset"], r["id"])
             if key not in seen:
-                seen.add(key)
+                seen[key] = r
                 out.append(r)
+            elif any(seen[key].get(k) != r.get(k) for k in ("em", "f1", "pred")):
+                conflicts += 1
+    if conflicts:
+        warnings.warn(
+            f"{conflicts} duplicate rows across run dirs disagree with the first copy kept",
+            stacklevel=2,
+        )
     return out
 
 

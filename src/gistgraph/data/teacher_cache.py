@@ -7,6 +7,7 @@ run the long full-context forward pass again, which is the main compute saving o
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,27 +55,26 @@ def build_teacher_cache(
             offsets.append(offsets[-1] + n)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.stem + ".tmp.npz")  # np.savez appends .npz to other names
     np.savez(
-        path,
+        tmp,
         keys=np.array(keys),
         offsets=np.array(offsets, dtype=np.int64),
         ids=np.concatenate(ids_flat),
         topk_idx=np.concatenate(idx_flat),
         topk_logits=np.concatenate(logit_flat),
     )
+    os.replace(tmp, path)
 
 
 def load_teacher_cache(path: str | Path) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
     """Return ``{example_id: (answer_ids, topk_idx, topk_logits)}``."""
-    z = np.load(path)
-    off = z["offsets"]
+    with np.load(path, allow_pickle=False) as z:  # each z[...] access re-reads the archive
+        keys, off = z["keys"], z["offsets"]
+        ids, idx, logits = z["ids"], z["topk_idx"], z["topk_logits"]
     return {
-        str(k): (
-            z["ids"][off[i] : off[i + 1]],
-            z["topk_idx"][off[i] : off[i + 1]],
-            z["topk_logits"][off[i] : off[i + 1]],
-        )
-        for i, k in enumerate(z["keys"])
+        str(k): (ids[off[i] : off[i + 1]], idx[off[i] : off[i + 1]], logits[off[i] : off[i + 1]])
+        for i, k in enumerate(keys)
     }
 
 
@@ -82,9 +82,10 @@ def make_train_items(
     tokenizer, examples: list[Example], teacher: dict, max_ctx_tokens: int, eos_id: int
 ) -> list[TrainItem]:
     """Join examples with their cached teacher outputs; tokenise contexts and gold answers."""
-    items = []
+    items, dropped = [], 0
     for ex in examples:
         if ex.id not in teacher:
+            dropped += 1
             continue
         ans_ids, idx, logits = teacher[ex.id]
         ctx = tokenizer.encode(ex.context, add_special_tokens=False)[:max_ctx_tokens]
@@ -99,6 +100,8 @@ def make_train_items(
                 np.array(gold, dtype=np.int64),
             )
         )
+    if dropped:
+        print(f"warning: {dropped} examples have no teacher output and were dropped", flush=True)
     return items
 
 

@@ -8,6 +8,7 @@ really reached, not the one they were asked for.
 from __future__ import annotations
 
 import json
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -104,8 +105,17 @@ def write_rows(rows: list[Row], path: str | Path) -> None:
 
 
 def read_rows(path: str | Path) -> list[Row]:
-    with Path(path).open(encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
+    """Rows of a JSONL file. A torn final line (from an interrupted write) is skipped."""
+    lines = [line for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = []
+    for i, line in enumerate(lines):
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            if i != len(lines) - 1:
+                raise
+            warnings.warn(f"{path}: skipping undecodable last line", stacklevel=2)
+    return rows
 
 
 def aggregate(rows: list[Row], by: tuple[str, ...] = ("method", "target_ratio", "dataset")):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import torch
@@ -12,6 +13,7 @@ from gistgraph.data.schema import Example
 from gistgraph.eval.harness import read_rows, run_eval, run_text_method, write_rows
 from gistgraph.eval.report import full_context_table, retention_markdown
 from gistgraph.llm.frozen import FrozenLM
+from gistgraph.utils.fingerprint import eval_hash
 
 
 def method_label(cfg: Config) -> str:
@@ -72,26 +74,38 @@ def evaluate_learned(cfg: Config, lm: FrozenLM, compressor) -> Path:
     """Evaluate ``compressor`` at every configured ratio and dataset. Resumable."""
     out = Path(cfg.out_dir)
     results = out / "results.jsonl"
+    h = eval_hash(cfg)
+    old = read_rows(results) if results.exists() else []
     finished = {
-        (r["method"], r["target_ratio"], r["dataset"])
-        for r in (read_rows(results) if results.exists() else [])
+        (r["method"], r["target_ratio"], r["dataset"]) for r in old if r.get("config_hash") == h
     }
+    stale = sum(r.get("config_hash") != h for r in old)
+    if stale:
+        warnings.warn(
+            f"{results}: {stale} rows come from a different (or unrecorded) config and will be "
+            "recomputed",
+            stacklevel=2,
+        )
+
+    def write(rows):
+        write_rows([{**r, "config_hash": h} for r in rows], results)
+
     compressor.eval()
     label = method_label(cfg)
     kw = {"batch_size": cfg.eval.batch_size, "max_new_tokens": cfg.eval.max_new_tokens}
     for dataset in cfg.data.eval:
         examples = load_eval_examples(cfg, lm, dataset)
         if ("full", 1.0, dataset) not in finished:
-            write_rows(run_text_method(lm, None, examples, 1.0, **kw), results)
+            write(run_text_method(lm, None, examples, 1.0, **kw))
         for ratio in cfg.eval.ratios:
             if (label, ratio, dataset) in finished:
                 continue
             rows = run_eval(
                 lm, examples, make_prepare(lm, compressor, cfg, ratio), label, ratio, **kw
             )
-            write_rows(rows, results)
+            write(rows)
             print(f"[{dataset}] {label} @ {ratio:g}x: {len(rows)} examples", flush=True)
-    rows = read_rows(results)
+    rows = [r for r in read_rows(results) if r.get("config_hash") == h]
     report = out / "report.md"
     report.write_text(
         "## Full-context reference\n\n"
