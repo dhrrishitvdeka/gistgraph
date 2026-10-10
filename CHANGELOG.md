@@ -6,6 +6,34 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Config fingerprinting: training refuses to resume into an `out_dir` trained with a different
+  config unless `--force` is passed.
+- Guard that skips optimizer steps with a non-finite loss or gradient.
+- Exact RNG state restore on resume.
+- Seeded random-graph control.
+- `py.typed` marker.
+- CI: Python 3.12, a Windows job, a wheel build job and Dependabot updates.
+- Pre-commit hygiene hooks (whitespace, end of file, YAML/TOML checks, large files, merge
+  conflicts).
+
+### Changed
+- Teacher-cache key includes dtype, top-k and prompt; cache loading is faster.
+- Dev split is disjoint from the eval split.
+- Stricter config validation: enums, types and circular `base` references.
+- Removed the dead fields `data.n_train` and `compressor.writer.kind`.
+- LLMLingua-2 is loaded once per run.
+- `run_experiments.py` exits non-zero when any run fails.
+- Raised floors to `torch>=2.6`; pinned `ruff==0.6.9` in the dev extra.
+
+### Fixed
+- Edge penalty under the Gumbel relaxation.
+- Checkpoint and cache writes are atomic.
+
+### Security
+- Checkpoints are loaded with `weights_only=True`.
+- CI actions pinned to commit SHAs, with read-only default permissions.
+
 ## [0.1.0] - 2026-10-06
 
 First public release (pre-release: no compressor has been trained yet).

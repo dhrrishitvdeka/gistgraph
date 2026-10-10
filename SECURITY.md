@@ -15,6 +15,8 @@ You can expect an acknowledgement within a week.
 ## Scope notes
 
 - The code downloads datasets and model weights from the Hugging Face Hub and, for LongBench, reads
-  a zip archive. Loading checkpoints with `torch.load` can execute code if the file is untrusted, so
-  only load `compressor.pt` files you produced or trust.
+  a zip archive.
+- Configs and checkpoints are treated as trusted input. Checkpoints are loaded with
+  `torch.load(..., weights_only=True)`, which refuses arbitrary pickled objects, but only load
+  `compressor.pt` files you produced or trust.
 - Experiment configs are plain YAML parsed with `yaml.safe_load`.

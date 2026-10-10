@@ -1,7 +1,8 @@
 # Results
 
-> **Snapshot, 2026-10-06, partial.** Generated from the baseline run only (`runs/m1_baselines`,
-> 200 examples per dataset). Only the datasets listed in the tables below had finished, and
+> **Snapshot, 2026-10-06, partial.** Generated from the baseline run only (`runs/m1_baselines`),
+> run with the override `data.n_eval=200` (200 examples per dataset); regenerating with the
+> shipped `configs/experiments/m1_baselines.yaml` uses 500. Only the datasets listed in the tables below had finished, and
 > LLMLingua-2 is missing at some ratios. **No learned compressor has been trained yet**, so every
 > hypothesis section (H1-H4) is empty. Regenerate this page with
 > `python -m gistgraph report runs/*` once runs exist.

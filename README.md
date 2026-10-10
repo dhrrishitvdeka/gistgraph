@@ -57,7 +57,10 @@ tests use a tiny randomly initialised model and need no GPU or download.
 
 Experiments are YAML files in `configs/experiments/`. Any value can be overridden on the command
 line (`a.b=value`). Each run writes its resolved config, logs, weights and `results.jsonl` to its
-`out_dir`, and training resumes from its last checkpoint.
+`out_dir`, and training resumes from its last checkpoint. Resuming into an `out_dir` that was
+trained with a different config is refused; pass `--force` to `train` to resume anyway. `--device`
+defaults to `cuda` when available, else `cpu`. `reproduce` reads `configs/`, which is not packaged,
+so run it from a checkout of the repository.
 
 ```bash
 python -m gistgraph reproduce m1                      # non-learned baselines, all datasets
@@ -89,6 +92,7 @@ Each note explains the design, the maths and why each choice was made.
 
 ```
 src/gistgraph/
+  __main__.py          `python -m gistgraph` entry point (see cli.py)
   config.py            YAML config schema, inheritance and overrides
   data/                datasets, prompts, teacher cache
   llm/frozen.py        frozen LM that can read soft prompts
@@ -96,7 +100,9 @@ src/gistgraph/
   model/               encoder, writers, gates, routing, edges, message passing, streaming
   train/               losses, rate controller, trainer
   eval/                metrics, harness, analysis, plots, probes
+  utils/               config fingerprinting, seeding
 configs/               base config and experiments
+scripts/               batch experiment runner
 tests/                 unit and integration tests
 ```
 
