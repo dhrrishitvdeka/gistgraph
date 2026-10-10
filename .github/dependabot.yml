@@ -8,3 +8,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # ruff is pinned to match pre-commit; new versions reformat code, so upgrade it deliberately
+      - dependency-name: ruff

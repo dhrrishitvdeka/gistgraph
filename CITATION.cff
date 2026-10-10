@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "Gist Graph"
 type: software
-version: 0.1.0
-date-released: 2026-10-06
+version: 0.2.0
+date-released: 2026-10-10
 license: Apache-2.0
 repository-code: "https://github.com/dhrrishitvdeka/gistgraph"
 url: "https://github.com/dhrrishitvdeka/gistgraph"

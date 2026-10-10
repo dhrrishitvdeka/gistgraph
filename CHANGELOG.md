@@ -6,6 +6,11 @@ All notable changes are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
+Hardening, an inference API, the edge-collapse fix found by the first training run, and a Colab
+notebook that trains, evaluates and publishes the model (pre-release: no trained model yet).
+
 ### Added
 - Config fingerprinting: training refuses to resume into an `out_dir` trained with a different
   config unless `--force` is passed.
@@ -67,5 +72,6 @@ First public release (pre-release: no compressor has been trained yet).
 - No compressor has been fully trained yet, so no performance claim is made for the method.
 - Non-learned baselines are evaluated on HotpotQA only (partial); see `docs/results/results.md`.
 
-[Unreleased]: https://github.com/dhrrishitvdeka/gistgraph/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dhrrishitvdeka/gistgraph/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dhrrishitvdeka/gistgraph/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dhrrishitvdeka/gistgraph/releases/tag/v0.1.0
