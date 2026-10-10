@@ -7,11 +7,17 @@ from torch import Tensor, nn
 
 from gistgraph.data.prompts import split_prompt
 
+DTYPES = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}
+
 
 def pick_dtype(name: str) -> torch.dtype:
     """Resolve a dtype name. ``auto`` is bf16 where supported, fp16 on older GPUs, else fp32."""
     if name != "auto":
-        return getattr(torch, name)
+        if name not in DTYPES:
+            raise ValueError(
+                f"unsupported dtype {name!r}; expected auto or one of {sorted(DTYPES)}"
+            )
+        return DTYPES[name]
     if not torch.cuda.is_available():
         return torch.float32
     return torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
@@ -50,12 +56,24 @@ class FrozenLM(nn.Module):
         self.grad_ckpt = grad_ckpt
 
     @classmethod
-    def from_pretrained(cls, name: str, dtype: str = "auto", grad_ckpt: bool = False, device=None):
+    def from_pretrained(
+        cls,
+        name: str,
+        dtype: str = "auto",
+        grad_ckpt: bool = False,
+        device=None,
+        revision: str | None = None,
+    ):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         torch_dtype = pick_dtype(dtype)
-        model = AutoModelForCausalLM.from_pretrained(name, dtype=torch_dtype)
-        tokenizer = AutoTokenizer.from_pretrained(name)
+        try:
+            model = AutoModelForCausalLM.from_pretrained(name, dtype=torch_dtype, revision=revision)
+        except TypeError:  # older transformers only know ``torch_dtype``
+            model = AutoModelForCausalLM.from_pretrained(
+                name, torch_dtype=torch_dtype, revision=revision
+            )
+        tokenizer = AutoTokenizer.from_pretrained(name, revision=revision)
         obj = cls(model, tokenizer, grad_ckpt=grad_ckpt)
         return obj.to(device) if device is not None else obj
 

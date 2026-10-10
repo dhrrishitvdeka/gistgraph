@@ -165,12 +165,23 @@ class RoutedCompressor(nn.Module):
         embeds = self.projector(z, pe) * gate.unsqueeze(-1)
         active = gate > 0
         key = aux["centroid"]
-        order = torch.where(active, key, torch.full_like(key, 3.0)).argsort(1)
+        order = torch.where(active, key, torch.full_like(key, 3.0)).argsort(dim=1, stable=True)
         embeds = embeds.gather(1, order[..., None].expand(-1, -1, embeds.shape[-1]))
         active = active.gather(1, order)
         aux["active"] = active.sum(1)
         aux["gate"] = gate.detach()  # in the original node order, like aux["adj"] and aux["write"]
         return Memory(embeds, active, aux)
+
+
+RANDOM_GRAPH_SEED = 1234
+
+
+def _control_generator(valid: Tensor) -> torch.Generator:
+    """Generator for the random-graph control, seeded by the input size so that the same shape
+    always gets the same graph (across calls, evals and processes)."""
+    gen = torch.Generator(device=valid.device)
+    gen.manual_seed(RANDOM_GRAPH_SEED + valid.shape[0] * 100_003 + valid.shape[1])
+    return gen
 
 
 class GraphCompressor(RoutedCompressor):
@@ -190,6 +201,8 @@ class GraphCompressor(RoutedCompressor):
         c = cfg.compressor
         d = c.encoder.d
         self.ec, self.pe_steps = c.edges, (c.projector.pe_steps if c.projector.pe == "rw" else 0)
+        if c.edges.mode not in ("learned", "random"):
+            raise ValueError(f"unknown edges.mode {c.edges.mode!r} (expected learned | random)")
         self.edges = None
         if c.edges.enabled and c.edges.mode == "learned":
             self.edges = EdgeInducer(
@@ -207,8 +220,10 @@ class GraphCompressor(RoutedCompressor):
         if self.edges is not None:
             adj, edge_aux = self.edges(z, active)
             aux.update(edge_aux)
-        elif self.ec.enabled:  # random-graph control
-            adj = random_adjacency(active, self.ec.relations, self.ec.max_deg)
+        elif self.ec.enabled and self.ec.mode == "random":  # random-graph control
+            adj = random_adjacency(
+                active, self.ec.relations, self.ec.max_deg, _control_generator(active)
+            )
         if self.gnn is not None:
             z = self.gnn(z, adj, active)
         pe = None

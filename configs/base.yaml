@@ -11,4 +11,3 @@ data:
   eval: [hotpotqa, 2wiki, squad]
   max_ctx_tokens: 1536
   n_eval: 500
-  n_train: 30000

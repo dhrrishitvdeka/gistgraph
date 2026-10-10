@@ -108,8 +108,11 @@ class EdgeInducer(nn.Module):
         nnz = (edge_probs > 0).sum(-1).float() * valid  # edges per node
         row = edge_probs.sum(-1).clamp(min=1e-9)
         ent = -(edge_probs / row[..., None] * torch.log(edge_probs / row[..., None] + 1e-9)).sum(-1)
+        # the Gumbel top-k weights are piecewise constant in the null logit, so the edge penalty
+        # reads the dense softmax "no edge" probability instead to keep a gradient
+        null_prob = probs[..., -1] if self.sparsifier == "entmax15" else logits.softmax(-1)[..., -1]
         aux = {
-            "exp_edges": ((1 - probs[..., -1]) * valid).sum(1),
+            "exp_edges": ((1 - null_prob) * valid).sum(1),
             "mean_degree": nnz.sum(1) / n_valid,
             "edge_entropy": (ent * valid).sum(1) / n_valid,
             "edge_mass": (edge_probs.sum(-1) * valid).sum(1) / n_valid,
@@ -129,11 +132,14 @@ class EdgeInducer(nn.Module):
         return torch.zeros_like(logits).scatter(-1, top, weights)
 
 
-def random_adjacency(valid: Tensor, relations: int, max_deg: int, generator=None) -> Tensor:
+def random_adjacency(
+    valid: Tensor, relations: int, max_deg: int, generator: torch.Generator | None = None
+) -> Tensor:
     """Control: each valid node reads from ``max_deg`` random valid nodes with random relations.
 
     Same degree and relation count as the learned graph, but no information about the content.
-    Weights are uniform and rows sum to one. Returns ``[B, R, K, K]``.
+    Weights are uniform and rows sum to one. Pass a seeded ``generator`` (on ``valid``'s device)
+    for a reproducible graph. Returns ``[B, R, K, K]``.
     """
     b, k = valid.shape
     r = relations

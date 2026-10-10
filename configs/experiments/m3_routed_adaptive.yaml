@@ -3,7 +3,7 @@ name: routed_adaptive
 out_dir: runs/m3_routed_adaptive
 compressor:
   type: routed
-  writer: {kind: routed, top_k: 2, adaptive: true, capacity_factor: 1.5, router_noise: 0.1, gate_init: 2.0}
+  writer: {top_k: 2, adaptive: true, capacity_factor: 1.5, router_noise: 0.1, gate_init: 2.0}
 loss:
   rate_dual_lr: 0.05
   rate_quad: 10.0

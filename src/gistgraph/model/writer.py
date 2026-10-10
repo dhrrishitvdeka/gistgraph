@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import warnings
+
 import torch
 from torch import Tensor, nn
+
+_clamp_warned = False  # warn about clamped slot counts only once per process
 
 
 def num_slots(n_tokens: Tensor, ratio: float | Tensor, k_max: int) -> Tensor:
     """Slots allotted to each document: ``floor(n_tokens / ratio)``, at least 1, at most k_max."""
+    global _clamp_warned
     k = torch.floor(n_tokens.float() / torch.as_tensor(ratio, device=n_tokens.device).float())
+    if not _clamp_warned and bool((k > k_max).any()):
+        _clamp_warned = True
+        warnings.warn(
+            f"slot count clamped to k_max={k_max}: the context is longer or the ratio lower than "
+            "the compressor was sized for",
+            stacklevel=2,
+        )
     return k.clamp(min=1, max=k_max).long()
 
 

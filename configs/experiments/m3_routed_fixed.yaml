@@ -3,4 +3,4 @@ name: routed_fixed
 out_dir: runs/m3_routed_fixed
 compressor:
   type: routed
-  writer: {kind: routed, top_k: 2, adaptive: false, router_noise: 0.1}
+  writer: {top_k: 2, adaptive: false, router_noise: 0.1}

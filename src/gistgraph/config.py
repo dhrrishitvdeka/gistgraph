@@ -11,8 +11,8 @@ keep runs reproducible and easy to sweep:
 from __future__ import annotations
 
 import dataclasses
-import types
 import typing
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,7 +34,6 @@ class DataConfig:
     eval: list[str] = field(default_factory=lambda: ["hotpotqa", "2wiki", "squad"])
     max_ctx_tokens: int = 1536
     n_eval: int = 500
-    n_train: int = 30000
 
 
 @dataclass
@@ -46,7 +45,6 @@ class EncoderConfig:
 
 @dataclass
 class WriterConfig:
-    kind: str = "flat"  # flat | routed
     top_k: int = 2
     capacity_factor: float = 1.5  # adaptive: candidate nodes = capacity_factor * N / ratio
     adaptive: bool = False
@@ -158,15 +156,21 @@ def _deep_merge(base: dict, new: dict) -> dict:
     return out
 
 
-def _read_yaml(path: Path) -> dict:
+def _read_yaml(path: Path, _stack: tuple[Path, ...] = ()) -> dict:
     """Read a YAML file, resolving its ``base:`` parents (relative to the file) first."""
+    path = path.resolve()
+    if path in _stack:
+        chain = " -> ".join(str(p) for p in (*_stack, path))
+        raise ValueError(f"circular base: reference: {chain}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(raw, dict):
+        raise TypeError(f"{path} must contain a mapping at the top level")
     parents = raw.pop("base", [])
     if isinstance(parents, str):
         parents = [parents]
     merged: dict = {}
     for parent in parents:
-        merged = _deep_merge(merged, _read_yaml((path.parent / parent).resolve()))
+        merged = _deep_merge(merged, _read_yaml(path.parent / parent, (*_stack, path)))
     return _deep_merge(merged, raw)
 
 
@@ -213,23 +217,101 @@ def _build(cls: type, data: dict, path: str = ""):
 
 def _coerce(tp: Any, value: Any, where: str) -> Any:
     origin = typing.get_origin(tp)
-    if origin in (list, typing.Union, types.UnionType) or tp in (int, float, bool, str):
-        if tp is float and isinstance(value, int) and not isinstance(value, bool):
-            return float(value)
-        if tp is float and isinstance(value, str):  # e.g. "1e-4" parsed as str by YAML 1.1
-            return float(value)
-        if tp in (int, float, bool, str) and not isinstance(value, tp):
+    if tp is bool:
+        if not isinstance(value, bool):
+            raise TypeError(f"{where} expects bool, got {type(value).__name__}")
+        return value
+    if tp in (int, float):
+        if isinstance(value, bool):
+            raise TypeError(f"{where} expects {tp.__name__}, got bool")
+        if tp is float and isinstance(value, int | str):  # "1e-4" is a str under YAML 1.1
+            try:
+                return float(value)
+            except ValueError:
+                raise ValueError(f"{where} expects a float, got {value!r}") from None
+        if not isinstance(value, tp):
             raise TypeError(f"{where} expects {tp.__name__}, got {type(value).__name__}")
-        if origin is list and not isinstance(value, list):
+        return value
+    if tp is str:
+        if not isinstance(value, str):
+            raise TypeError(f"{where} expects str, got {type(value).__name__}")
+        return value
+    if origin is list:
+        if not isinstance(value, list):
             raise TypeError(f"{where} expects a list, got {type(value).__name__}")
+        (item_tp,) = typing.get_args(tp) or (Any,)
+        if item_tp is Any:
+            return value
+        return [_coerce(item_tp, v, f"{where}[{i}]") for i, v in enumerate(value)]
     return value
+
+
+COMPRESSOR_TYPES = ("flat", "routed", "graph")
+EDGE_MODES = ("learned", "random")
+SPARSIFIERS = ("entmax15", "gumbel_topk")
+LLM_DTYPES = ("auto", "float32", "float16", "bfloat16")
+PE_KINDS = ("rw", "none")
+ENCODER_HEADS = 8  # attention heads used by the segment encoder and flat writer
+
+
+def validate(cfg: Config) -> Config:
+    """Check enums and numeric ranges that the dataclass types alone cannot express."""
+    c = cfg.compressor
+
+    def need(ok: bool, msg: str) -> None:
+        if not ok:
+            raise ValueError(msg)
+
+    if not (c.type in COMPRESSOR_TYPES or c.type.startswith("text:")):
+        # KeyError, like build_compressor, since the type names a registry entry
+        raise KeyError(f"unknown compressor type {c.type!r}; expected one of {COMPRESSOR_TYPES}")
+    need(c.edges.mode in EDGE_MODES, f"compressor.edges.mode must be one of {EDGE_MODES}")
+    need(
+        c.edges.sparsifier in SPARSIFIERS,
+        f"compressor.edges.sparsifier must be one of {SPARSIFIERS}, got {c.edges.sparsifier!r}",
+    )
+    need(c.projector.pe in PE_KINDS, f"compressor.projector.pe must be one of {PE_KINDS}")
+    need(cfg.llm.dtype in LLM_DTYPES, f"llm.dtype must be one of {LLM_DTYPES}")
+    need(c.ratio > 0, "compressor.ratio must be > 0")
+    need(bool(cfg.train.ratios), "train.ratios must not be empty")
+    need(all(r > 0 for r in cfg.train.ratios), "train.ratios must all be > 0")
+    need(all(r > 0 for r in cfg.eval.ratios), "eval.ratios must all be > 0")
+    for key in ("steps", "grad_accum", "batch", "ckpt_every", "eval_every"):
+        need(getattr(cfg.train, key) >= 1, f"train.{key} must be >= 1")
+    need(cfg.eval.batch_size >= 1, "eval.batch_size must be >= 1")
+    need(cfg.eval.stream_chunks >= 1, "eval.stream_chunks must be >= 1")
+    need(c.streaming.chunks >= 1, "compressor.streaming.chunks must be >= 1")
+    need(c.writer.top_k >= 1, "compressor.writer.top_k must be >= 1")
+    need(c.writer.capacity_factor > 0, "compressor.writer.capacity_factor must be > 0")
+    need(c.edges.max_deg >= 1, "compressor.edges.max_deg must be >= 1")
+    need(c.edges.relations >= 1, "compressor.edges.relations must be >= 1")
+    need(c.encoder.seg_len >= 1, "compressor.encoder.seg_len must be >= 1")
+    need(
+        c.encoder.d > 0 and c.encoder.d % 2 == 0 and c.encoder.d % ENCODER_HEADS == 0,
+        f"compressor.encoder.d must be even and divisible by {ENCODER_HEADS}, got {c.encoder.d}",
+    )
+    learned = not c.type.startswith("text:")
+    if learned and cfg.train.ratios:
+        lowest = min(cfg.train.ratios)
+        if c.encoder.seg_len > lowest:
+            warnings.warn(
+                f"compressor.encoder.seg_len={c.encoder.seg_len} exceeds the smallest train ratio "
+                f"{lowest:g}: segments alone already compress more than that",
+                stacklevel=2,
+            )
+        if cfg.eval.ratios and min(cfg.eval.ratios) < lowest:
+            raise ValueError(
+                f"min(eval.ratios)={min(cfg.eval.ratios):g} is below min(train.ratios)={lowest:g};"
+                " the compressor has no slots for ratios it was never trained on"
+            )
+    return cfg
 
 
 def load_config(path: str | Path | None = None, overrides: list[str] | None = None) -> Config:
     """Load a config from YAML (optional) and apply overrides. Defaults fill any gaps."""
     data = _read_yaml(Path(path)) if path is not None else {}
     data = apply_overrides(data, overrides or [])
-    return _build(Config, data)
+    return validate(_build(Config, data))
 
 
 def config_to_dict(cfg: Config) -> dict:

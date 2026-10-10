@@ -28,21 +28,22 @@ def run_baselines(cfg: Config, device: str = "cuda") -> Path:
 
     lm = FrozenLM.from_pretrained(cfg.llm.name, cfg.llm.dtype, grad_ckpt=False, device=device)
     kw = {"batch_size": cfg.eval.batch_size, "max_new_tokens": cfg.eval.max_new_tokens}
+    # one instance per method, reused across datasets and ratios (llmlingua2 caches its model)
+    methods = {
+        name: build_baseline(name, device=device) if name == "llmlingua2" else build_baseline(name)
+        for name in dict.fromkeys(cfg.eval.methods)
+    }
     for dataset in cfg.data.eval:
         examples = [
             fit_context(ex, lm.tokenizer, cfg.data.max_ctx_tokens)
             for ex in load_examples(dataset, cfg.eval.split, cfg.data.n_eval, cfg.seed)
         ]
         jobs = [("full", 1.0, None)] + [
-            (name, ratio, build_baseline(name, device=device) if name == "llmlingua2" else None)
-            for name in cfg.eval.methods
-            for ratio in cfg.eval.ratios
+            (name, ratio, methods[name]) for name in cfg.eval.methods for ratio in cfg.eval.ratios
         ]
         for name, ratio, method in jobs:
             if (name, ratio, dataset) in finished:
                 continue
-            if method is None and name != "full":
-                method = build_baseline(name)
             rows = run_text_method(lm, None if name == "full" else method, examples, ratio, **kw)
             write_rows(rows, results)
             print(f"[{dataset}] {name} @ {ratio:g}x: {len(rows)} examples", flush=True)

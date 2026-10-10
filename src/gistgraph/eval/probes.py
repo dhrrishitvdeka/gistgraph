@@ -28,9 +28,24 @@ def paragraph_token_map(tokenizer, ex: Example) -> np.ndarray | None:
     return np.searchsorted(starts, first_char, side="right") - 1
 
 
-def node_home_paragraph(write: np.ndarray, token_para: np.ndarray, n_para: int):
-    """Home paragraph per node and whether it received any weight. ``write``: ``[M, K]``."""
-    onehot = np.eye(n_para)[token_para[: write.shape[0]]]  # [M, P]
+def segment_paragraphs(token_para: np.ndarray, seg_len: int, n_rows: int) -> np.ndarray:
+    """Paragraph of each encoder segment: the majority paragraph of its ``seg_len`` tokens
+    (ties go to the earliest paragraph). Returns the first ``n_rows`` segments."""
+    if seg_len <= 1:
+        return token_para[:n_rows]
+    out = []
+    for start in range(0, len(token_para), seg_len):
+        window = token_para[start : start + seg_len]
+        out.append(np.bincount(window).argmax())
+    return np.asarray(out, dtype=token_para.dtype)[:n_rows]
+
+
+def node_home_paragraph(write: np.ndarray, token_para: np.ndarray, n_para: int, seg_len: int = 1):
+    """Home paragraph per node and whether it received any weight. ``write``: ``[M, K]`` with one
+    row per encoder segment (``seg_len`` tokens each)."""
+    rows = segment_paragraphs(token_para, seg_len, write.shape[0])
+    write = write[: len(rows)]
+    onehot = np.eye(n_para)[rows]  # [M, P]
     mass = write.T @ onehot  # [K, P]
     return mass.argmax(1), mass.sum(1) > 1e-6
 
@@ -99,7 +114,9 @@ def probe_model(lm, compressor, cfg, examples: list[Example], ratio: float) -> d
         if "adj" not in aux or "write" not in aux:
             raise ValueError("the probe needs a graph model with learned edges")
         write = aux["write"][0].float().cpu().numpy()
-        home, has_mass = node_home_paragraph(write, token_para, len(ex.paragraphs))
+        home, has_mass = node_home_paragraph(
+            write, token_para, len(ex.paragraphs), cfg.compressor.encoder.seg_len
+        )
         active = aux["gate"][0].cpu().numpy() > 0
         per_example.append(
             edge_enrichment(

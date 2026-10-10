@@ -3,9 +3,45 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from gistgraph.config import load_config
+
+
+def _default_device() -> str:
+    import torch
+
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _positive(cast):
+    """argparse type that parses with ``cast`` and requires a value > 0."""
+
+    def parse(text: str):
+        try:
+            value = cast(text)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"invalid {cast.__name__} value: {text!r}") from None
+        if value <= 0:
+            raise argparse.ArgumentTypeError(f"must be > 0, got {text}")
+        return value
+
+    parse.__name__ = f"positive_{cast.__name__}"
+    return parse
+
+
+def _load(args):
+    """Load the config named on the command line; config mistakes exit cleanly with status 2."""
+    try:
+        return load_config(args.config, args.overrides)
+    except (KeyError, TypeError, ValueError, FileNotFoundError) as err:
+        print(
+            f"error: {err.args[0] if isinstance(err, KeyError) and err.args else err}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from None
+
 
 EXP = "configs/experiments"
 # milestone -> (command, configs). Each is the headline experiment of that milestone.
@@ -29,50 +65,52 @@ REPRODUCE = {
 def _cmd_baselines(args) -> None:
     from gistgraph.eval.run_baselines import run_baselines
 
-    cfg = load_config(args.config, args.overrides)
+    cfg = _load(args)
     print(f"report written to {run_baselines(cfg, device=args.device)}")
 
 
 def _cmd_train(args) -> None:
     from gistgraph.train.run import run_training
 
-    cfg = load_config(args.config, args.overrides)
-    run_training(cfg, device=args.device)
+    cfg = _load(args)
+    run_training(cfg, device=args.device, force=args.force)
 
 
 def _cmd_eval(args) -> None:
-    import torch
-
     from gistgraph.eval.run_learned import evaluate_learned
     from gistgraph.llm.frozen import FrozenLM
     from gistgraph.model.compressor import build_compressor
     from gistgraph.model.projector import mean_embedding_norm
+    from gistgraph.utils.fingerprint import load_compressor_state
 
-    cfg = load_config(args.config, args.overrides)
+    cfg = _load(args)
     lm = FrozenLM.from_pretrained(cfg.llm.name, cfg.llm.dtype, False, args.device)
     norm = mean_embedding_norm(lm.model.get_input_embeddings().weight)
     comp = build_compressor(cfg, lm.d_model, norm).to(lm.device)
-    comp.load_state_dict(torch.load(Path(cfg.out_dir) / "compressor.pt", map_location=lm.device))
+    comp.load_state_dict(
+        load_compressor_state(Path(cfg.out_dir) / "compressor.pt", map_location=lm.device)
+    )
     print(f"report written to {evaluate_learned(cfg, lm, comp)}")
 
 
 def _cmd_probe(args) -> None:
     import json
 
-    import torch
-
     from gistgraph.data.datasets import load_examples
     from gistgraph.eval.probes import probe_model
     from gistgraph.llm.frozen import FrozenLM
     from gistgraph.model.compressor import build_compressor
     from gistgraph.model.projector import mean_embedding_norm
+    from gistgraph.utils.fingerprint import load_compressor_state
 
-    cfg = load_config(args.config, args.overrides)
+    cfg = _load(args)
     lm = FrozenLM.from_pretrained(cfg.llm.name, cfg.llm.dtype, False, args.device)
     norm = mean_embedding_norm(lm.model.get_input_embeddings().weight)
     comp = build_compressor(cfg, lm.d_model, norm).to(lm.device)
-    comp.load_state_dict(torch.load(Path(cfg.out_dir) / "compressor.pt", map_location=lm.device))
-    examples = load_examples("hotpotqa", cfg.eval.split, args.n, cfg.seed)
+    comp.load_state_dict(
+        load_compressor_state(Path(cfg.out_dir) / "compressor.pt", map_location=lm.device)
+    )
+    examples = load_examples(args.dataset, cfg.eval.split, args.n, cfg.seed)
     summary = probe_model(lm, comp, cfg, examples, args.ratio)
     out = Path(cfg.out_dir) / "edge_probe.json"
     out.write_text(json.dumps(summary, indent=2), encoding="utf-8")
@@ -89,36 +127,40 @@ def _cmd_reproduce(args) -> None:
     command, configs = REPRODUCE[args.milestone]
     for config in configs:
         args.config = Path(config)
+        args.force = getattr(args, "force", False)
         {"baselines": _cmd_baselines, "train": _cmd_train}[command](args)
 
 
 def main(argv: list[str] | None = None) -> None:
+    device = _default_device()
     parser = argparse.ArgumentParser(prog="gistgraph")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("baselines", help="evaluate non-learned baselines")
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--device", default="cuda")
+    p.add_argument("--device", default=device)
     p.add_argument("overrides", nargs="*", help="dotted overrides such as eval.ratios=[2,4]")
     p.set_defaults(func=_cmd_baselines)
 
     p = sub.add_parser("train", help="train a compressor, then evaluate it")
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--device", default="cuda")
+    p.add_argument("--device", default=device)
     p.add_argument("overrides", nargs="*")
+    p.add_argument("--force", action="store_true", help="overwrite an existing run directory")
     p.set_defaults(func=_cmd_train)
 
     p = sub.add_parser("eval", help="evaluate a trained compressor from its out_dir")
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--device", default="cuda")
+    p.add_argument("--device", default=device)
     p.add_argument("overrides", nargs="*")
     p.set_defaults(func=_cmd_eval)
 
     p = sub.add_parser("probe", help="edge-alignment probe on HotpotQA supporting paragraphs")
     p.add_argument("--config", type=Path, required=True)
-    p.add_argument("--device", default="cuda")
-    p.add_argument("--ratio", type=float, default=4.0)
-    p.add_argument("--n", type=int, default=200)
+    p.add_argument("--device", default=device)
+    p.add_argument("--ratio", type=_positive(float), default=4.0)
+    p.add_argument("--n", type=_positive(int), default=200)
+    p.add_argument("--dataset", default="hotpotqa")
     p.add_argument("overrides", nargs="*")
     p.set_defaults(func=_cmd_probe)
 
@@ -129,7 +171,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p = sub.add_parser("reproduce", help="rerun a milestone's headline experiment")
     p.add_argument("milestone", choices=sorted(REPRODUCE))
-    p.add_argument("--device", default="cuda")
+    p.add_argument("--device", default=device)
     p.add_argument("overrides", nargs="*")
     p.set_defaults(func=_cmd_reproduce)
 
