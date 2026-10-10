@@ -75,6 +75,10 @@ python -m gistgraph report runs/*                     # docs/results/results.md 
 `scripts/run_experiments.py` runs several configs in sequence and skips finished ones; see
 [docs/design/m5.md](docs/design/m5.md) for the full list of commands.
 
+No local GPU? [notebooks/train_colab.ipynb](notebooks/train_colab.ipynb) runs the baselines, trains
+and evaluates the graph and flat compressors, writes the results page and publishes the model, with
+runs kept on Google Drive so a dropped session resumes. A free T4 is enough.
+
 ## Use a trained model
 
 `GistGraph` wraps a trained compressor and its frozen LLM for inference, with no experiment
@@ -117,6 +121,7 @@ Each note explains the design, the maths and why each choice was made.
 ```
 src/gistgraph/
   __main__.py          `python -m gistgraph` entry point (see cli.py)
+  api.py               GistGraph inference API (load, compress, answer, save, publish)
   config.py            YAML config schema, inheritance and overrides
   data/                datasets, prompts, teacher cache
   llm/frozen.py        frozen LM that can read soft prompts
@@ -127,6 +132,7 @@ src/gistgraph/
   utils/               config fingerprinting, seeding
 configs/               base config and experiments
 scripts/               batch experiment runner
+notebooks/             Colab notebook: train, evaluate, report, publish
 tests/                 unit and integration tests
 ```
 

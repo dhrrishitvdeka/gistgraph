@@ -16,6 +16,12 @@ All notable changes are recorded here. The format follows
 - CI: Python 3.12, a Windows job, a wheel build job and Dependabot updates.
 - Pre-commit hygiene hooks (whitespace, end of file, YAML/TOML checks, large files, merge
   conflicts).
+- `GistGraph` inference API: `from_pretrained`, `from_run`, `save_pretrained`, `push_to_hub`,
+  `compress`, `answer` and `answer_batch`, with weights stored as safetensors.
+- CLI commands `ask` (answer a question from a model and a context) and `export` (training run to
+  a shareable model directory).
+- `notebooks/train_colab.ipynb`: train, evaluate, report and publish on Google Colab.
+- Progress output while the teacher cache is built.
 
 ### Changed
 - Teacher-cache key includes dtype, top-k and prompt; cache loading is faster.
@@ -25,8 +31,13 @@ All notable changes are recorded here. The format follows
 - LLMLingua-2 is loaded once per run.
 - `run_experiments.py` exits non-zero when any run fails.
 - Raised floors to `torch>=2.6`; pinned `ruff==0.6.9` in the dev extra.
+- `auto` precision uses bf16 only where the GPU supports it natively; T4-class GPUs use fp16.
+- A step with a non-finite loss is skipped and training moves on to the next batch.
 
 ### Fixed
+- Learned edges could collapse for good: an unbounded "no edge" score overtook every edge around the
+  end of warm-up, after which entmax gave the edges no gradient. The score is now relative to each
+  node's best edge and bounded, and edge scores read layer-normalised node states (see M4 notes).
 - Edge penalty under the Gumbel relaxation.
 - Checkpoint and cache writes are atomic.
 
